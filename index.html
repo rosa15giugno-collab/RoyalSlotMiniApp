@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Royal Slot by Rosa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="app-shell" id="app">
+    <div class="ambient-glow ambient-glow--left"></div>
+    <div class="ambient-glow ambient-glow--right"></div>
+
+    <header class="header">
+      <img
+        class="header__logo"
+        src="assets/brand/casino-by-rosa-logo.png?v=3"
+        alt="CASINO by Rosa"
+        width="640"
+        height="426"
+        decoding="async"
+      >
+      <h1 class="header__title">ROYAL SLOT</h1>
+      <div class="header__led-strip" aria-hidden="true"></div>
+    </header>
+
+    <section class="panel player-panel" aria-label="Profilo giocatore">
+      <div class="player-info">
+        <div class="player-info__row player-info__row--username" id="usernameRow" hidden>
+          <span class="player-info__icon" aria-hidden="true">👤</span>
+          <span class="player-info__username" id="usernameValue"></span>
+        </div>
+        <div class="player-info__row player-info__row--balance">
+          <span class="player-info__icon" aria-hidden="true">🪙</span>
+          <span class="player-info__balance">
+            <span class="player-info__balance-value" id="balanceValue">5.000</span>
+            <span class="player-info__currency">CHIP</span>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel bet-panel" aria-label="Selezione puntata">
+      <div class="panel__label">Puntata</div>
+      <div class="bet-controls">
+        <button type="button" class="bet-btn bet-btn--minus" id="betMinus" aria-label="Diminuisci puntata">−</button>
+        <div class="bet-controls__value" id="betValue">250</div>
+        <button type="button" class="bet-btn bet-btn--plus" id="betPlus" aria-label="Aumenta puntata">+</button>
+      </div>
+      <div class="bet-presets" id="betPresets" role="group" aria-label="Puntate rapide"></div>
+    </section>
+
+    <section class="slot-machine" aria-label="Slot machine">
+      <div class="slot-machine__frame">
+        <div class="slot-machine__top-light" aria-hidden="true"></div>
+        <div class="reels-window">
+          <div class="reels-window__shine" aria-hidden="true"></div>
+          <div class="reels" id="reels">
+            <div class="reel" data-reel="0"><div class="reel__strip"></div></div>
+            <div class="reel" data-reel="1"><div class="reel__strip"></div></div>
+            <div class="reel" data-reel="2"><div class="reel__strip"></div></div>
+          </div>
+          <svg class="payline-guides" id="paylineGuides" aria-hidden="true"></svg>
+          <svg class="payline-wins" id="paylineWins" aria-hidden="true"></svg>
+        </div>
+        <div class="slot-machine__bottom-light" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <button type="button" class="spin-btn" id="spinBtn">
+      <span class="spin-btn__glow" aria-hidden="true"></span>
+      <span class="spin-btn__text">SPIN</span>
+    </button>
+
+    <section class="panel result-panel" aria-label="Risultato">
+      <div class="panel__label">Risultato</div>
+      <p class="result-text" id="resultText">Premi SPIN per giocare</p>
+    </section>
+
+    <section class="panel win-panel" aria-label="Vincita">
+      <div class="panel__label">Vincita</div>
+      <div class="win-display">
+        <span class="win-display__value" id="winValue">0</span>
+        <span class="win-display__currency">chips</span>
+      </div>
+    </section>
+
+    <div class="win-overlay" id="winOverlay" aria-hidden="true">
+      <div class="win-overlay__burst"></div>
+      <p class="win-overlay__title">JACKPOT!</p>
+      <p class="win-overlay__amount" id="winOverlayAmount">+0</p>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

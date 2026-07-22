@@ -1,0 +1,38 @@
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+secrets.*
+
+# Databases and backups
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*backup*
+*.bak
+
+# Python (dev scripts only)
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+.cursor/
+
+# Node (if added later)
+node_modules/
+dist/
+.cache/
