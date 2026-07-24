@@ -38,6 +38,9 @@ const state = {
 let displayedBalance = null;
 let balanceAnimFrame = null;
 const reelStopTimers = [];
+let fxLayerEl = null;
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const dom = {
   usernameRow: document.getElementById('usernameRow'),
@@ -96,6 +99,103 @@ function playOutcomeSound(winAmount) {
     return;
   }
   audio.playLoss();
+}
+
+function getFxLayer() {
+  if (fxLayerEl?.isConnected) return fxLayerEl;
+
+  fxLayerEl = document.createElement('div');
+  fxLayerEl.className = 'fx-layer';
+  fxLayerEl.setAttribute('aria-hidden', 'true');
+  dom.appShell.appendChild(fxLayerEl);
+  return fxLayerEl;
+}
+
+function getElementCenter(el) {
+  const rect = el.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+}
+
+function scheduleFxRemoval(el, ms) {
+  window.setTimeout(() => {
+    el.remove();
+  }, ms);
+}
+
+function spawnFlyingChips() {
+  const layer = getFxLayer();
+  const origin = getElementCenter(dom.reelsWindow);
+  const target = getElementCenter(dom.balanceValue);
+  const count = 5 + Math.floor(Math.random() * 4);
+
+  for (let i = 0; i < count; i += 1) {
+    const chip = document.createElement('div');
+    chip.className = 'fx-chip';
+    if (i % 2 === 0) chip.classList.add('fx-chip--disc');
+
+    const startOffsetX = (Math.random() - 0.5) * 96;
+    const startOffsetY = (Math.random() - 0.5) * 48;
+    const duration = 500 + Math.random() * 300;
+    const delay = i * (35 + Math.random() * 25);
+    const deltaX = target.x - origin.x - startOffsetX;
+    const deltaY = target.y - origin.y - startOffsetY;
+
+    chip.style.left = `${origin.x + startOffsetX}px`;
+    chip.style.top = `${origin.y + startOffsetY}px`;
+    chip.style.setProperty('--fx-dx', `${deltaX}px`);
+    chip.style.setProperty('--fx-dy', `${deltaY}px`);
+    chip.style.setProperty('--fx-rotate', `${160 + Math.random() * 320}deg`);
+    chip.style.setProperty('--fx-duration', `${duration}ms`);
+    chip.style.setProperty('--fx-delay', `${delay}ms`);
+
+    chip.addEventListener('animationend', () => chip.remove(), { once: true });
+    scheduleFxRemoval(chip, duration + delay + 120);
+    layer.appendChild(chip);
+  }
+}
+
+function spawnCoinRain() {
+  const layer = getFxLayer();
+  const count = 18 + Math.floor(Math.random() * 7);
+
+  for (let i = 0; i < count; i += 1) {
+    const coin = document.createElement('div');
+    coin.className = 'fx-rain-coin';
+
+    const left = Math.random() * window.innerWidth;
+    const duration = 1200 + Math.random() * 800;
+    const delay = Math.random() * 550;
+    const drift = (Math.random() - 0.5) * 140;
+
+    coin.style.left = `${left}px`;
+    coin.style.setProperty('--fx-rain-drift', `${drift}px`);
+    coin.style.setProperty('--fx-rain-rotate', `${360 + Math.random() * 720}deg`);
+    coin.style.setProperty('--fx-duration', `${duration}ms`);
+    coin.style.setProperty('--fx-delay', `${delay}ms`);
+
+    coin.addEventListener('animationend', () => coin.remove(), { once: true });
+    scheduleFxRemoval(coin, duration + delay + 120);
+    layer.appendChild(coin);
+  }
+}
+
+function playWinVisualEffects(winAmount) {
+  if (winAmount <= 0 || prefersReducedMotion.matches) return;
+
+  spawnFlyingChips();
+
+  if (winAmount >= CONFIG.ui.bigWinThreshold) {
+    spawnCoinRain();
+  }
+}
+
+function clearWinFx() {
+  if (fxLayerEl) {
+    fxLayerEl.replaceChildren();
+  }
 }
 
 function createAudioToggle() {
@@ -395,6 +495,7 @@ function clearWinEffects() {
   dom.reelsWindow.classList.remove('reels-window--has-wins');
   clearWinningLineOverlays(dom.paylineWins);
   dom.winOverlay.classList.remove('is-visible');
+  clearWinFx();
   renderPaylineGuidesOverlay();
 }
 
@@ -456,6 +557,7 @@ async function handleSpin() {
       playOutcomeSound(winAmount);
 
       if (winAmount > 0) {
+        playWinVisualEffects(winAmount);
         highlightPaylineWins(paylineEvaluation);
         setResult(formatSpinResult(winAmount, state.bet, winningSummary), 'win');
         showWinOverlay(winAmount);
@@ -495,6 +597,7 @@ async function handleSpin() {
     state.lastWin = winAmount;
     renderBalance(true);
     renderWin(winAmount);
+    playWinVisualEffects(winAmount);
     highlightPaylineWins(paylineEvaluation);
     setResult(formatSpinResult(winAmount, state.bet, winningSummary), 'win');
     showWinOverlay(winAmount);
