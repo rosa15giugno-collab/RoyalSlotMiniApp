@@ -6,7 +6,7 @@ export const CONFIG = {
 
   /** Future Python backend base URL (leave empty in demo mode). */
   api: {
-    baseUrl: 'https://casinobot-stabile-production.up.railway.app',
+    baseUrl: 'https://casinobot-stabile-production-2a50.up.railway.app',
     endpoints: {
       balance: '/api/balance',
       spin: '/api/slot/spin',
