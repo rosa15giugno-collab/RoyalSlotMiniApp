@@ -514,6 +514,13 @@ function formatServerWinningSummary(winningLines) {
     .join(', ');
 }
 
+function createSpinReferenceId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `spin-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 async function handleSpin() {
   if (state.spinning) return;
   if (state.balance < state.bet) {
@@ -528,17 +535,18 @@ async function handleSpin() {
   clearWinEffects();
   clearReelStopTimers();
   setSpinning(true);
-  setSpinLoading(Boolean(CONFIG.api.baseUrl));
+  setSpinLoading(Boolean(CONFIG.api.baseUrl) && Boolean(telegram.getInitData()));
   setResult('I rulli girano...', 'neutral');
   state.lastWin = 0;
   renderWin(0);
   telegram.haptic('light');
 
-  const isServerMode = Boolean(CONFIG.api.baseUrl);
+  const isServerMode = Boolean(CONFIG.api.baseUrl) && Boolean(telegram.getInitData());
 
   if (isServerMode) {
+    const referenceId = createSpinReferenceId();
     try {
-      const serverResult = await telegram.requestSpin(state.bet);
+      const serverResult = await telegram.requestSpin(state.bet, referenceId);
 
       if (!serverResult?.grid) {
         throw new Error('Invalid spin response');
@@ -548,6 +556,7 @@ async function handleSpin() {
 
       const winAmount = serverResult.winAmount;
       const winningSummary = formatServerWinningSummary(serverResult.winningLines);
+      // Overlay uses local payline geometry; credited chips are server winAmount.
       const paylineEvaluation = evaluateEnabledPaylines(serverResult.grid, state.bet);
 
       state.balance = serverResult.balanceAfter;
@@ -572,7 +581,11 @@ async function handleSpin() {
       clearReelStopTimers();
       setSpinLoading(false);
       setReelsSpinning(false);
-      setResult('Errore durante lo spin. Riprova.', 'loss');
+      if (err?.code === 'insufficient_balance') {
+        setResult('Saldo insufficiente. Riduci la puntata.', 'loss');
+      } else {
+        setResult('Errore durante lo spin. Riprova.', 'loss');
+      }
       telegram.haptic('error');
     }
 

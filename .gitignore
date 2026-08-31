@@ -32,6 +32,13 @@ desktop.ini
 .vscode/
 .cursor/
 
+# Freesound originals (never ship 5-minute Mega / full reel takes)
+_audio_incoming/
+
+# Local QA screenshots and audio processing reports (not product runtime)
+poker/_qa_*.png
+assets/royal-poker/audio/PROCESSING_REPORT.json
+
 # Node (if added later)
 node_modules/
 dist/

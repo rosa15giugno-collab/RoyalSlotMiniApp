@@ -54,17 +54,17 @@ console.log('=== Simulazione 1: una linea vincente (250 CHIP) ===');
 const singleEval = evaluateEnabledPaylines(singleWinGrid, 250);
 const singleWin = calculateWinAmount(singleEval);
 console.log(`Linee: ${singleEval.winningLines.map((e) => e.line.name).join(', ') || 'nessuna'}`);
-console.log(`Atteso: horseshoe x3 → payout 5 × 250 = 1.250 CHIP`);
+console.log(`Atteso: horseshoe x3 → round(5 × 250 × 1.655634) = 2.070 CHIP`);
 console.log(`Calcolato: ${singleWin.toLocaleString('it-IT')} CHIP`);
-console.log(singleWin === 1250 ? 'OK\n' : 'ERRORE\n');
+console.log(singleWin === 2070 ? 'OK\n' : 'ERRORE\n');
 
 console.log('=== Simulazione 2: più linee vincenti (500 CHIP) ===');
 const multiEval = evaluateEnabledPaylines(multiWinGrid, 500);
 const multiWin = calculateWinAmount(multiEval);
 console.log(`Linee: ${multiEval.winningLines.map((e) => e.line.name).join(', ')}`);
-console.log(`Atteso: 2 × (horseshoe payout 5 × 500) = 5.000 CHIP`);
+console.log(`Atteso: 2 × round(5 × 500 × 0.827817) = 4.140 CHIP`);
 console.log(`Calcolato: ${multiWin.toLocaleString('it-IT')} CHIP`);
-console.log(multiWin === 5000 ? 'OK\n' : 'ERRORE\n');
+console.log(multiWin === 4140 ? 'OK\n' : 'ERRORE\n');
 
 console.log('Griglia di test (reels x righe):');
 sampleGrid.forEach((column, reelIndex) => {

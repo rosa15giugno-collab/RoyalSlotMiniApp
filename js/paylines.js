@@ -76,10 +76,23 @@ export function evaluateEnabledPaylines(grid, bet) {
   };
 }
 
+export function lineScaleForBet(bet = CONFIG.bet.default) {
+  const table = CONFIG.lineScaleByBet || {};
+  if (Object.prototype.hasOwnProperty.call(table, bet)) {
+    return table[bet];
+  }
+  return 1;
+}
+
+/** payout_multiplier × bet × LINE_SCALE → integer chips (JS Math.round, amount >= 0). */
+export function linePayoutChips(payoutMultiplier, bet) {
+  return Math.round(payoutMultiplier * bet * lineScaleForBet(bet));
+}
+
 export function calculateWinAmount(paylineEvaluation) {
   const bet = paylineEvaluation.bet;
   return paylineEvaluation.winningLines.reduce(
-    (total, entry) => total + entry.payoutMultiplier * bet,
+    (total, entry) => total + linePayoutChips(entry.payoutMultiplier, bet),
     0,
   );
 }

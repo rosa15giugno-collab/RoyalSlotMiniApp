@@ -30,6 +30,14 @@ export class TelegramBridge {
     return this.webApp?.initData ?? '';
   }
 
+  /**
+   * Call the Casino API only with real Telegram initData.
+   * Local/demo open (no WebApp initData) must not hit production.
+   */
+  _hasTelegramAuth() {
+    return Boolean(this.getInitData());
+  }
+
   getUsername() {
     const user = this.user ?? this.webApp?.initDataUnsafe?.user ?? null;
     if (!user?.username) return null;
@@ -58,7 +66,7 @@ export class TelegramBridge {
   async fetchProfile() {
     const localUsername = this.getUsername();
     const base = CONFIG.api.baseUrl;
-    if (!base) {
+    if (!base || !this._hasTelegramAuth()) {
       return { username: localUsername, demo: true };
     }
 
@@ -79,6 +87,14 @@ export class TelegramBridge {
       balance,
       demo: false,
     };
+  }
+
+  notifyPlayer(message) {
+    const text = String(message || '').trim();
+    if (!text) return;
+    if (this.webApp?.showAlert) {
+      this.webApp.showAlert(text);
+    }
   }
 
   haptic(type = 'light') {
@@ -103,7 +119,7 @@ export class TelegramBridge {
    */
   async fetchBalance() {
     const base = CONFIG.api.baseUrl;
-    if (!base) {
+    if (!base || !this._hasTelegramAuth()) {
       return { balance: CONFIG.demo.initialBalance, demo: true };
     }
 
@@ -124,11 +140,12 @@ export class TelegramBridge {
   }
 
   /**
-   * Future: server-authoritative spin (recommended for production).
+   * Server-authoritative spin. Same reference_id is reused for HTTP retries
+   * of this request only — a new SPIN click must generate a new UUID.
    */
-  async requestSpin(bet) {
+  async requestSpin(bet, referenceId) {
     const base = CONFIG.api.baseUrl;
-    if (!base) return null;
+    if (!base || !this._hasTelegramAuth()) return null;
 
     const response = await fetch(`${base}${CONFIG.api.endpoints.spin}`, {
       method: 'POST',
@@ -136,19 +153,71 @@ export class TelegramBridge {
         'Content-Type': 'application/json',
         'X-Telegram-Init-Data': this.getInitData(),
       },
-      body: JSON.stringify({ bet }),
+      body: JSON.stringify({ bet, reference_id: referenceId }),
     });
 
+    const data = await response.json().catch(() => ({}));
+
+    if (response.status === 400) {
+      const detail = data.detail;
+      const errorCode = detail && typeof detail === 'object' ? detail.error : null;
+      const message = typeof detail === 'string' ? detail : detail?.message;
+      if (errorCode === 'insufficient_balance' || message === 'Insufficient balance') {
+        const err = new Error('INSUFFICIENT_BALANCE');
+        err.code = 'insufficient_balance';
+        err.chips = typeof detail?.chips === 'number' ? detail.chips : null;
+        throw err;
+      }
+    }
+
     if (!response.ok) throw new Error('Spin request failed');
-    const data = await response.json();
 
     return {
       bet: data.bet,
       grid: data.grid,
       winningLines: data.winning_lines ?? [],
-      winAmount: data.win_amount ?? 0,
+      winAmount: data.win_amount ?? data.final_win ?? 0,
+      baseWin: data.base_win,
       balanceBefore: data.balance_before,
       balanceAfter: data.balance_after,
+      referenceId: data.reference_id,
+      replayed: Boolean(data.replayed),
+      xpAwarded: data.xp_awarded,
     };
+  }
+
+  /**
+   * PokerSlot server-authoritative round. Full payload — the client animates
+   * it and must not re-roll Mystery, Free Spins, or wallet math.
+   */
+  async requestPokerSpin(bet, referenceId) {
+    const base = CONFIG.api.baseUrl;
+    if (!base || !this._hasTelegramAuth()) return null;
+
+    const response = await fetch(`${base}${CONFIG.api.endpoints.pokerSpin}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': this.getInitData(),
+      },
+      body: JSON.stringify({ bet, reference_id: referenceId }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.status === 400) {
+      const detail = data.detail;
+      const errorCode = detail && typeof detail === 'object' ? detail.error : null;
+      const message = typeof detail === 'string' ? detail : detail?.message;
+      if (errorCode === 'insufficient_balance' || message === 'Insufficient balance') {
+        const err = new Error('INSUFFICIENT_BALANCE');
+        err.code = 'insufficient_balance';
+        err.chips = typeof detail?.chips === 'number' ? detail.chips : null;
+        throw err;
+      }
+    }
+
+    if (!response.ok) throw new Error('Poker spin request failed');
+    return data;
   }
 }

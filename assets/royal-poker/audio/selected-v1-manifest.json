@@ -1,0 +1,115 @@
+{
+  "name": "POKERSLOT_SELECTED_V1",
+  "status": "APPROVATO DALL'UTENTE",
+  "frozen": true,
+  "approvedBy": "user",
+  "approvedAt": "2026-08-31",
+  "activation": "?audioFiles=1&soundPack=selected-v1",
+  "noSynthFallback": true,
+  "muteStorageKey": "pokerSlotAudioEnabled",
+  "buses": [
+    "MASTER",
+    "REEL",
+    "EFFECTS",
+    "FEATURE"
+  ],
+  "files": {
+    "spinButton": "spin-button-selected.wav",
+    "betClick": "spin-button-selected.wav",
+    "reelStart": "reel-start-selected.wav",
+    "reelLoop": "reel-loop-selected.wav",
+    "reelStop": "reel-stop-selected.wav",
+    "reelStopFinal": "reel-stop-final-selected.wav",
+    "lineWin": "line-win-selected.wav",
+    "mysteryOpen": "mystery-open-selected.wav",
+    "cardPick": "card-pick-selected.wav",
+    "cardFlip": "card-flip-selected.wav",
+    "mysteryWin": "mystery-win-selected.wav",
+    "scatter": "scatter-selected.wav",
+    "freeSpinStart": "free-spin-start-selected.wav",
+    "freeSpinLoop": "free-spin-loop-selected.wav",
+    "freeSpinEnd": "free-spin-end-selected.wav",
+    "goodWin": "good-win-selected.wav",
+    "bigWin": "big-win-selected.wav",
+    "megaWin": "mega-win-selected.wav"
+  },
+  "testGains": {
+    "spinButton": 0.55,
+    "betClick": 0.35,
+    "reelStart": 0.45,
+    "reelLoop": 0.27,
+    "reelStop": 0.55,
+    "reelStopFinal": 0.66,
+    "lineWin": 0.4,
+    "mysteryOpen": 0.55,
+    "cardPick": 0.45,
+    "cardFlip": 0.53,
+    "mysteryWin": 0.57,
+    "scatter": 0.55,
+    "freeSpinStart": 0.57,
+    "freeSpinLoop": 0.24,
+    "freeSpinEnd": 0.53,
+    "goodWin": 0.52,
+    "bigWin": 0.63,
+    "megaWin": 0.68
+  },
+  "reelStopVariations": [
+    {
+      "reel": 1,
+      "gainMultiplier": 0.9,
+      "playbackRate": 1.02
+    },
+    {
+      "reel": 2,
+      "gainMultiplier": 0.94,
+      "playbackRate": 0.99
+    },
+    {
+      "reel": 3,
+      "gainMultiplier": 0.97,
+      "playbackRate": 1.01
+    },
+    {
+      "reel": 4,
+      "gainMultiplier": 1.0,
+      "playbackRate": 0.98
+    },
+    {
+      "reel": 5,
+      "file": "reel-stop-final-selected.wav",
+      "gainMultiplier": 1.0,
+      "playbackRate": 1.0
+    }
+  ],
+  "spinTimingStopMs": [
+    1200,
+    1400,
+    1600,
+    1800,
+    2000
+  ],
+  "winThresholds": {
+    "normal": "ratio < 2",
+    "good": "2 <= ratio < 5",
+    "big": "5 <= ratio < 10",
+    "mega": "ratio >= 10",
+    "ratioFormula": "walletCreditInteger / totalBet"
+  },
+  "priority": [
+    "Mystery",
+    "Scatter / Free Spin",
+    "Mega / Big / Good Win",
+    "Line Win",
+    "Reel sounds"
+  ],
+  "mathNotes": {
+    "mysteryDraws": 1,
+    "MATH_V6": "must remain unchanged",
+    "thresholdsAreUXOnly": true
+  },
+  "notes": [
+    "POKERSLOT_SELECTED_V1 = APPROVATO DALL'UTENTE (2026-08-31). Pack congelato.",
+    "Do not change WAV files, cuts, gains, or event mapping without a new explicit request.",
+    "No source originals are included in the runtime pack."
+  ]
+}

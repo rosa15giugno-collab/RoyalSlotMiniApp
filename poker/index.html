@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#050508">
+  <title>Royal Poker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=15">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="stage">
+    <div class="machine" id="machine" aria-label="Royal Poker">
+      <img
+        class="machine__art"
+        id="machineArt"
+        alt="Royal Poker"
+        src="../assets/royal-poker/royal_poker_base_v2.png"
+        draggable="false"
+      >
+      <div class="machine__grid" id="cardGrid" aria-hidden="true"></div>
+      <svg class="payline-layer" id="paylineGuides" aria-hidden="true"></svg>
+      <svg class="payline-layer payline-layer--wins" id="paylineWins" aria-hidden="true"></svg>
+      <div class="machine__lines" id="lineCount" aria-live="polite">LINEE 3</div>
+      <div class="machine__balance" id="balanceValue">—</div>
+      <div class="machine__bet" id="betValue">100</div>
+      <div class="machine__controls" id="controls"></div>
+      <div class="win-plaque" id="winPlaque" hidden>
+        <span class="win-plaque__gem" aria-hidden="true"></span>
+        <span class="win-plaque__label">VINCITA</span>
+        <div class="win-plaque__stack">
+          <span class="win-plaque__amount" id="winValue"></span>
+        </div>
+      </div>
+      <div class="win-fx" id="winFx" hidden aria-hidden="true">
+        <div class="win-fx__scrim"></div>
+        <div class="win-fx__flash" id="winFxFlash" aria-hidden="true"></div>
+        <div class="win-fx__panel">
+          <p class="win-fx__kicker" id="winFxKicker">BIG WIN</p>
+          <p class="win-fx__amount" id="winFxAmount">+0</p>
+          <p class="win-fx__unit">CHIPS</p>
+        </div>
+        <div class="win-fx__burst" id="winFxBurst" aria-hidden="true"></div>
+        <div class="win-fx__rain" id="winFxRain" aria-hidden="true"></div>
+      </div>
+      <div class="fs-remain" id="fsRemain" hidden>GIRI GRATIS <span class="fs-remain__count" id="fsRemainCount"></span></div>
+      <div class="mx-overlay" id="mysteryOverlay" hidden aria-hidden="true">
+        <div class="mx-overlay__scrim"></div>
+        <div
+          class="mx-overlay__panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mxTitle"
+          aria-describedby="mxSub"
+        >
+          <div class="mx-overlay__pips" id="mxPips" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <p class="mx-overlay__kicker" id="mxTitle">MYSTERY BONUS</p>
+          <p class="mx-overlay__sub" id="mxSub">SCEGLI UNA CARTA</p>
+          <p class="mx-overlay__count" id="mxCount"></p>
+          <div class="mx-pick" id="mxPick" role="group" aria-label="Scegli una carta">
+            <button type="button" class="mx-card" aria-label="Carta 1">
+              <span class="mx-card__inner">
+                <span class="mx-card__face mx-card__face--back" aria-hidden="true"></span>
+                <span class="mx-card__face mx-card__face--front">
+                  <span class="mx-card__win">HAI VINTO</span>
+                  <span class="mx-card__prize"></span>
+                  <span class="mx-card__unit">CHIPS</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="mx-card" aria-label="Carta 2">
+              <span class="mx-card__inner">
+                <span class="mx-card__face mx-card__face--back" aria-hidden="true"></span>
+                <span class="mx-card__face mx-card__face--front">
+                  <span class="mx-card__win">HAI VINTO</span>
+                  <span class="mx-card__prize"></span>
+                  <span class="mx-card__unit">CHIPS</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="mx-card" aria-label="Carta 3">
+              <span class="mx-card__inner">
+                <span class="mx-card__face mx-card__face--back" aria-hidden="true"></span>
+                <span class="mx-card__face mx-card__face--front">
+                  <span class="mx-card__win">HAI VINTO</span>
+                  <span class="mx-card__prize"></span>
+                  <span class="mx-card__unit">CHIPS</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="mx-card" aria-label="Carta 4">
+              <span class="mx-card__inner">
+                <span class="mx-card__face mx-card__face--back" aria-hidden="true"></span>
+                <span class="mx-card__face mx-card__face--front">
+                  <span class="mx-card__win">HAI VINTO</span>
+                  <span class="mx-card__prize"></span>
+                  <span class="mx-card__unit">CHIPS</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="mx-card" aria-label="Carta 5">
+              <span class="mx-card__inner">
+                <span class="mx-card__face mx-card__face--back" aria-hidden="true"></span>
+                <span class="mx-card__face mx-card__face--front">
+                  <span class="mx-card__win">HAI VINTO</span>
+                  <span class="mx-card__prize"></span>
+                  <span class="mx-card__unit">CHIPS</span>
+                </span>
+              </span>
+            </button>
+          </div>
+          <p class="mx-overlay__live" id="mxPrize" aria-live="polite"></p>
+        </div>
+        <div class="mx-overlay__flash" id="mxFlash" aria-hidden="true"></div>
+        <div class="mx-overlay__burst" id="mxBurst" aria-hidden="true"></div>
+      </div>
+      <div class="fs-overlay" id="freeSpinOverlay" hidden aria-hidden="true">
+        <div class="fs-overlay__scrim"></div>
+        <div
+          class="fs-overlay__panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fsAward"
+          aria-describedby="fsLabel"
+        >
+          <div class="fs-overlay__pips" id="fsPips" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="fs-overlay__symbol">
+            <img id="fsScatterImg" alt="" draggable="false">
+            <span class="fs-overlay__shine" aria-hidden="true"></span>
+          </div>
+          <p class="fs-overlay__label" id="fsLabel"></p>
+          <p class="fs-overlay__award" id="fsAward">
+            <span class="fs-overlay__count" id="fsCount"></span>
+            <span class="fs-overlay__unit">GIRI GRATIS</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="app.js?v=30"></script>
+</body>
+</html>

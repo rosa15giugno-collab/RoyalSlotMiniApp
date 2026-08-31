@@ -64,8 +64,9 @@ export class SlotEngine {
     const grid = this.buildRandomGrid();
     const reels = grid.map((column) => column[1]);
     const paylineEvaluation = evaluatePaylinesFn(grid, bet);
+    const scale = CONFIG.lineScaleByBet?.[bet] ?? 1;
     const winAmount = paylineEvaluation.winningLines.reduce(
-      (total, entry) => total + entry.payoutMultiplier * bet,
+      (total, entry) => total + Math.round(entry.payoutMultiplier * bet * scale),
       0,
     );
 

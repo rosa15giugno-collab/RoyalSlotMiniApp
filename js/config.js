@@ -10,6 +10,7 @@ export const CONFIG = {
     endpoints: {
       balance: '/api/balance',
       spin: '/api/slot/spin',
+      pokerSpin: '/api/poker/spin',
       profile: '/api/user/profile',
     },
   },
@@ -23,6 +24,16 @@ export const CONFIG = {
   bet: {
     default: 250,
     presets: [250, 500, 1000],
+  },
+
+  /**
+   * FASE 6 — display-only line scale. Must match api/slot_engine.py LINE_SCALE_BY_BET.
+   * Server remains authoritative for credited chips.
+   */
+  lineScaleByBet: {
+    250: 1.655634,
+    500: 0.827817,
+    1000: 0.620863,
   },
 
   assets: {
