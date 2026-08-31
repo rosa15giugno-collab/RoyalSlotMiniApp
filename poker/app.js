@@ -1142,36 +1142,90 @@ function maybeRunLineTest() {
   demoSpin();
 }
 
-async function playReelSpin(forcedNames, forcedSettlement) {
+function prepareReelStrip(finalNames) {
   hidePaylineGuides();
   hideWinPaylines();
   clearWinHighlights();
   clearSpinWin();
-  const nextNames = forcedNames || takeNextGrid();
-  const evalResult = forcedSettlement?.evalResult || logEngineEval(nextNames);
-  const plans = reels.map((reel, col) => {
+  return reels.map((reel, col) => {
     const current = columnUrls(state.cards, col);
-    const final = columnUrls(nextNames, col);
+    const final = columnUrls(finalNames, col);
     const extras = pickStripExtras(cardUrls, SPIN_TIMING.extraCards);
     buildSpinStrip(reel, current, extras, final);
     return { final, duration: SPIN_TIMING.stopMs[col] };
   });
+}
 
-  await Promise.all(
+function applyServerStripFinals(names) {
+  reels.forEach((reel, col) => {
+    const finals = columnUrls(names, col);
+    const cells = reel.strip.children;
+    const base = cells.length - finals.length;
+    if (base < 0) return;
+    finals.forEach((src, i) => {
+      const img = cells[base + i]?.querySelector('img');
+      if (!img) return;
+      img.src = src;
+      if (typeof img.decode === 'function') {
+        img.decode().catch(() => undefined);
+      }
+    });
+  });
+}
+
+async function restoreIdleAfterAbort(motionPromise) {
+  reels.forEach((reel, col) => {
+    const spinning = reel.strip;
+    if (!spinning.parentNode) return;
+    const idle = document.createElement('div');
+    idle.className = 'reel-strip';
+    spinning.replaceWith(idle);
+    reel.strip = idle;
+    paintIdle(reel, columnUrls(state.cards, col));
+    reel._idleStrip = idle;
+    reel.strip = spinning;
+  });
+  try {
+    await motionPromise;
+  } catch {
+    /* motion must not block abort restore */
+  }
+  reels.forEach((reel) => {
+    if (reel._idleStrip) {
+      reel.strip = reel._idleStrip;
+      delete reel._idleStrip;
+    }
+  });
+}
+
+async function runPreparedReelMotion(plans, abortCtl) {
+  let motionLive = true;
+
+  void Promise.allSettled(
     reels.flatMap((reel) =>
       [...reel.strip.querySelectorAll('img')].map((img) =>
-        typeof img.decode === 'function' ? img.decode().catch(() => undefined) : Promise.resolve(),
+        typeof img.decode === 'function' ? img.decode() : Promise.resolve(),
       ),
     ),
   );
 
-  await pokerAudio.resumePlayback();
-  await pokerAudio.whenSamplesReady();
-  pokerAudio.playSpin();
-  pokerAudio.startReelLoop({ energetic: state.inFreeSpins });
+  void (async () => {
+    try {
+      await pokerAudio.resumePlayback();
+      await pokerAudio.whenSamplesReady();
+      if (!motionLive || abortCtl?.aborted) return;
+      pokerAudio.playSpin();
+      pokerAudio.startReelLoop({ energetic: state.inFreeSpins });
+      if (!motionLive || abortCtl?.aborted) pokerAudio.stopReelLoop();
+    } catch {
+      /* audio must never block motion */
+    }
+  })();
+
   try {
     await spinReels(reels, plans, {
       onReelStop(index) {
+        if (abortCtl?.aborted) return;
         try {
           pokerAudio.logReelSync(`reel ${index + 1} visual settled`);
           pokerAudio.playReelStop(index);
@@ -1181,8 +1235,16 @@ async function playReelSpin(forcedNames, forcedSettlement) {
       },
     });
   } finally {
+    motionLive = false;
     pokerAudio.stopReelLoop();
   }
+}
+
+async function playReelSpin(forcedNames, forcedSettlement) {
+  const nextNames = forcedNames || takeNextGrid();
+  const evalResult = forcedSettlement?.evalResult || logEngineEval(nextNames);
+  const plans = prepareReelStrip(nextNames);
+  await runPreparedReelMotion(plans);
   state.cards = nextNames;
   const settlement = forcedSettlement
     || settleAndCredit(evalResult, state.lockedBet);
@@ -1342,7 +1404,7 @@ async function runServerFreeSpins(spins) {
   }
 }
 
-async function presentServerRound(round, { applyBalance = true } = {}) {
+async function presentServerRound(round, { applyBalance = true, skipPaidVisual = false } = {}) {
   if (!round?.paid_spin?.grid) {
     throw new Error('Invalid poker spin response');
   }
@@ -1354,7 +1416,17 @@ async function presentServerRound(round, { applyBalance = true } = {}) {
   const names = namesFromServerGrid(round.paid_spin.grid);
   const evalResult = evalFromServerSpin(round.paid_spin);
   const settlement = settlementFromServerPaid(round, evalResult);
-  await playReelSpin(names, settlement);
+  if (skipPaidVisual) {
+    state.cards = names;
+    state.lastEval = evalResult;
+    if (settlement.mystery?.triggered && settlement.mysteryCredit > 0) {
+      await highlightBonusCells(evalResult);
+    } else {
+      await playWinHighlight(evalResult, settlement.lineScatterCredit);
+    }
+  } else {
+    await playReelSpin(names, settlement);
+  }
   if (settlement.mystery?.triggered && settlement.mysteryCredit > 0) {
     await showMysteryOverlay(evalResult.bonus.count, settlement.mysteryCredit);
     state.mysteryCredited = true;
@@ -1400,11 +1472,27 @@ async function serverSpin() {
   cueSpinGesture();
   publishFlow();
 
+  const abortCtl = { aborted: false };
+  const plans = prepareReelStrip(state.cards);
+  const motionPromise = runPreparedReelMotion(plans, abortCtl);
+  const referenceId = createSpinReferenceId();
+  const roundPromise = telegram.requestPokerSpin(bet, referenceId).then((round) => {
+    applyServerStripFinals(namesFromServerGrid(round.paid_spin.grid));
+    return round;
+  });
+
+  let paidVisualSettled = false;
   try {
-    const referenceId = createSpinReferenceId();
-    const round = await telegram.requestPokerSpin(bet, referenceId);
-    await presentServerRound(round);
+    const round = await roundPromise;
+    await motionPromise;
+    paidVisualSettled = true;
+    await presentServerRound(round, { skipPaidVisual: true });
   } catch (error) {
+    abortCtl.aborted = true;
+    pokerAudio.stopReelLoop();
+    if (!paidVisualSettled) {
+      await restoreIdleAfterAbort(motionPromise);
+    }
     if (error?.code === 'insufficient_balance' || error?.message === 'INSUFFICIENT_BALANCE') {
       showInsufficientBalanceNotice();
       try {
