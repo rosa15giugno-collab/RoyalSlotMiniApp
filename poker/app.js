@@ -39,7 +39,7 @@ import {
   settleSimulatedSpin,
 } from './math-config.js?v=6';
 import { toWalletChips } from './wallet-chips.js';
-import { classifyWin, pokerAudio, WIN_TIERS } from './audio-manager.js?v=26';
+import { classifyWin, pokerAudio, WIN_TIERS } from './audio-manager.js?v=27';
 import {
   bindWinFx,
   hideWinFx,
@@ -57,6 +57,11 @@ import {
   overlayPipCount,
   overlayScatterLabel,
 } from './free-spin-award.js';
+import {
+  buildServerFxRound,
+  expectedAudioSeq,
+  parseServerFxKind,
+} from './server-fx-fixtures.js?v=1';
 
 const telegram = new TelegramBridge();
 
@@ -946,7 +951,8 @@ function readComboTest() {
 
 function maybeShowFsPreview() {
   if (
-    readFsTestCount()
+    readServerFxKind()
+    || readFsTestCount()
     || readBonusTestCount()
     || readComboTest()
     || readWinPreviewMode()
@@ -968,11 +974,12 @@ function readWinPreviewMode() {
 }
 
 function maybeRunWinPreview() {
-  if (readLineTest() || readWinFxTest() || !readWinPreviewMode()) return;
+  if (readServerFxKind() || readLineTest() || readWinFxTest() || !readWinPreviewMode()) return;
   demoSpin();
 }
 
 function maybeRunFsTest() {
+  if (readServerFxKind()) return;
   if (readLineTest() || readWinFxTest() || readWinPreviewMode() || readBonusTestCount() || readComboTest()) return;
   const count = readFsTestCount();
   if (!count) return;
@@ -982,6 +989,7 @@ function maybeRunFsTest() {
 }
 
 function maybeRunBonusTest() {
+  if (readServerFxKind()) return;
   if (readLineTest() || readWinFxTest() || readWinPreviewMode() || readComboTest()) return;
   const count = readBonusTestCount();
   if (!count) return;
@@ -990,6 +998,7 @@ function maybeRunBonusTest() {
 }
 
 function maybeRunComboTest() {
+  if (readServerFxKind()) return;
   if (readWinFxTest() || readLineTest() || readWinPreviewMode()) return;
   if (!readComboTest()) return;
   window.__POKER_FORCE_COMBO = 1;
@@ -1003,8 +1012,45 @@ function readWinFxTest() {
   return ['normal', 'good', 'big', 'mega'].includes(raw) ? raw : '';
 }
 
+/** Local server-payload presentation harness. No Railway, no wallet. */
+async function maybeRunServerFxTest() {
+  const kind = readServerFxKind();
+  if (!kind) return;
+  const round = buildServerFxRound(kind);
+  document.body.dataset.serverFx = kind;
+  document.body.dataset.audioSeq = expectedAudioSeq(kind).join(',');
+  state.betKey = '100';
+  state.lockedBet = 100;
+  state.spinning = true;
+  state.serverAuthoritative = true;
+  state.overlayShows = 0;
+  setControlsLocked(true);
+  hideWinFx(winFxRefs);
+  cueSpinGesture();
+  publishFlow();
+  try {
+    await presentServerRound(round, { applyBalance: false });
+  } catch (error) {
+    console.warn('[PokerSlot] serverFx harness failed:', error);
+  } finally {
+    clearBonusHighlights();
+    hideWinPaylines();
+    state.inFreeSpins = false;
+    state.freeSpinsLeft = 0;
+    state.lockedBet = null;
+    state.spinning = false;
+    state.serverAuthoritative = false;
+    state.mysteryPhase = '';
+    updateFsRemain();
+    setControlsLocked(false);
+    publishFlow();
+    previewActivePaylines();
+  }
+}
+
 /** Visual-only celebration. Does not debit/credit the wallet or call math. */
 async function maybeRunWinFxTest() {
+  if (readServerFxKind()) return;
   const kind = readWinFxTest();
   if (!kind) return;
   state.betKey = '100';
@@ -1119,6 +1165,8 @@ async function playReelSpin(forcedNames, forcedSettlement) {
     ),
   );
 
+  await pokerAudio.resumePlayback();
+  await pokerAudio.whenSamplesReady();
   pokerAudio.playSpin();
   pokerAudio.startReelLoop({ energetic: state.inFreeSpins });
   try {
@@ -1175,6 +1223,14 @@ async function runFreeSpins(awarded) {
   }
 }
 
+function readServerFxKind() {
+  try {
+    return parseServerFxKind(new URLSearchParams(window.location.search).get('serverFx'));
+  } catch {
+    return '';
+  }
+}
+
 function isLocalPreviewFlow() {
   return Boolean(
     readLineTest()
@@ -1183,8 +1239,15 @@ function isLocalPreviewFlow() {
     || readWinFxTest()
     || readFsTestCount()
     || readFsPreviewCount()
-    || readWinPreviewMode(),
+    || readWinPreviewMode()
+    || readServerFxKind(),
   );
+}
+
+function cueSpinGesture() {
+  pokerAudio.unlock();
+  pokerAudio.playSpinButton();
+  telegram.haptic?.('heavy');
 }
 
 function isServerMode() {
@@ -1279,6 +1342,43 @@ async function runServerFreeSpins(spins) {
   }
 }
 
+async function presentServerRound(round, { applyBalance = true } = {}) {
+  if (!round?.paid_spin?.grid) {
+    throw new Error('Invalid poker spin response');
+  }
+  state.serverAuthoritative = true;
+  if (typeof round.bet === 'number' && Number.isFinite(round.bet) && round.bet > 0) {
+    state.lockedBet = round.bet;
+  }
+  state.mysteryDraws = round.mystery_draws || 1;
+  const names = namesFromServerGrid(round.paid_spin.grid);
+  const evalResult = evalFromServerSpin(round.paid_spin);
+  const settlement = settlementFromServerPaid(round, evalResult);
+  await playReelSpin(names, settlement);
+  if (settlement.mystery?.triggered && settlement.mysteryCredit > 0) {
+    await showMysteryOverlay(evalResult.bonus.count, settlement.mysteryCredit);
+    state.mysteryCredited = true;
+  }
+  const awarded = round.free_spins_awarded || round.free_spins?.length || 0;
+  if (awarded > 0) {
+    await showFreeSpinOverlay(
+      round.paid_spin.scatter_count,
+      awarded,
+    );
+    await runServerFreeSpins(round.free_spins || []);
+  } else if (settlement.mystery?.triggered) {
+    await playWinHighlight(evalResult, settlement.lineScatterCredit);
+  }
+  if (
+    applyBalance
+    && typeof round.balance_after === 'number'
+    && Number.isFinite(round.balance_after)
+  ) {
+    state.balance = toWalletChips(round.balance_after);
+    updateBalanceUi();
+  }
+}
+
 async function serverSpin() {
   if (state.spinning || !state.ready || state.inFreeSpins) return;
   const bet = currentBetAmount();
@@ -1297,42 +1397,13 @@ async function serverSpin() {
   state.mysteryPhase = '';
   setControlsLocked(true);
   hideWinFx(winFxRefs);
-  pokerAudio.unlock();
-  await pokerAudio.whenSamplesReady();
-  pokerAudio.playSpinButton();
-  telegram.haptic?.('heavy');
+  cueSpinGesture();
   publishFlow();
 
   try {
     const referenceId = createSpinReferenceId();
     const round = await telegram.requestPokerSpin(bet, referenceId);
-    if (!round?.paid_spin?.grid) {
-      throw new Error('Invalid poker spin response');
-    }
-    state.lockedBet = round.bet;
-    state.mysteryDraws = round.mystery_draws || 1;
-    const names = namesFromServerGrid(round.paid_spin.grid);
-    const evalResult = evalFromServerSpin(round.paid_spin);
-    const settlement = settlementFromServerPaid(round, evalResult);
-    await playReelSpin(names, settlement);
-    if (settlement.mystery?.triggered && settlement.mysteryCredit > 0) {
-      await showMysteryOverlay(evalResult.bonus.count, settlement.mysteryCredit);
-      state.mysteryCredited = true;
-    }
-    const awarded = round.free_spins_awarded || round.free_spins?.length || 0;
-    if (awarded > 0) {
-      await showFreeSpinOverlay(
-        round.paid_spin.scatter_count,
-        awarded,
-      );
-      await runServerFreeSpins(round.free_spins || []);
-    } else if (settlement.mystery?.triggered) {
-      await playWinHighlight(evalResult, settlement.lineScatterCredit);
-    }
-    if (typeof round.balance_after === 'number' && Number.isFinite(round.balance_after)) {
-      state.balance = toWalletChips(round.balance_after);
-      updateBalanceUi();
-    }
+    await presentServerRound(round);
   } catch (error) {
     if (error?.code === 'insufficient_balance' || error?.message === 'INSUFFICIENT_BALANCE') {
       showInsufficientBalanceNotice();
@@ -1389,10 +1460,7 @@ async function demoSpin() {
   state.mysteryPhase = '';
   setControlsLocked(true);
   hideWinFx(winFxRefs);
-  pokerAudio.unlock();
-  await pokerAudio.whenSamplesReady();
-  pokerAudio.playSpinButton();
-  telegram.haptic?.('heavy');
+  cueSpinGesture();
   state.balance -= bet;
   updateBalanceUi();
   publishFlow();
@@ -1551,6 +1619,7 @@ async function init() {
   setSpinEnabled(true);
   updateBetUi();
   previewActivePaylines();
+  void maybeRunServerFxTest();
   maybeShowFsPreview();
   void maybeRunWinFxTest();
   maybeRunLineTest();

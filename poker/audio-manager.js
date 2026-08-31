@@ -2,11 +2,12 @@
  * PokerSlot audio — dedicated manager (not Slot Royale).
  * Reel product path: local WAV/MP3 in assets/royal-poker/audio/.
  * Synth A/B/C/D is a leftover technical test only (?audioTest=reelA..D).
- * Approved pack POKERSLOT_SELECTED_V1 (frozen 2026-08-31): ?audioFiles=1&soundPack=selected-v1
+ * Approved pack POKERSLOT_SELECTED_V1 (frozen 2026-08-31) is the product default.
+ * Opt out with ?soundPack=off or synth-only ?audioTest=reelA..D.
  * In pack mode missing files stay silent (no synth A/B/C/D fallback).
  */
 
-import { reelSamples, SELECTED_V1_FILES } from './reel-samples.js?v=25';
+import { reelSamples, SELECTED_V1_FILES } from './reel-samples.js?v=26';
 
 
 /**
@@ -197,6 +198,19 @@ export class PokerAudioManager {
     } catch {
       /* autoplay blocked — visuals still run */
     }
+  }
+
+  /** Awaitable resume after HTTP / awaits that can re-suspend iOS AudioContext. */
+  resumePlayback() {
+    this.unlock();
+    try {
+      if (this._ctx && this._ctx.state === 'suspended') {
+        return this._ctx.resume().catch(() => undefined);
+      }
+    } catch {
+      /* ignore */
+    }
+    return Promise.resolve();
   }
 
   whenSamplesReady() {
@@ -671,6 +685,17 @@ export class PokerAudioManager {
     this._traceReel('spin-button');
     if (!this._live()) return;
     if (this._packMode()) {
+      if (!reelSamples.buffer('spin')) {
+        Promise.resolve(this.whenSamplesReady())
+          .then(() => {
+            if (!this._live() || !this._packMode()) return;
+            if (reelSamples.buffer('spin')) {
+              this._playPackCue('spin', { bus: 'effects', gain: PACK_GAIN.spin, track: false });
+            }
+          })
+          .catch(() => undefined);
+        return;
+      }
       this._playPackCue('spin', { bus: 'effects', gain: PACK_GAIN.spin, track: false });
       return;
     }

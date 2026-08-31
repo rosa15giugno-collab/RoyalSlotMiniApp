@@ -76,20 +76,38 @@ function parseChoice(value) {
 
 function parsePackId(value) {
   const p = String(value || '').trim().toLowerCase();
+  if (p === 'off' || p === 'none' || p === '0') return '';
   if (p === 'selected-v1' || p === 'pokerslot_selected_v1' || p === 'v1') {
     return SELECTED_PACK_ID;
   }
   return '';
 }
 
+function synthTestActive() {
+  try {
+    return Boolean(String(new URLSearchParams(window.location.search).get('audioTest') || '').trim());
+  } catch {
+    return false;
+  }
+}
+
 function readUrlKit() {
   try {
     const q = new URLSearchParams(window.location.search);
     const filesFlag = String(q.get('audioFiles') || '').trim();
-    const pack = parsePackId(q.get('soundPack'));
-    const enabled = filesFlag === '1' || filesFlag.toLowerCase() === 'true'
+    const packOff = String(q.get('soundPack') || '').trim().toLowerCase() === 'off';
+    let pack = parsePackId(q.get('soundPack'));
+    // Product default: approved POKERSLOT_SELECTED_V1. Query flag is no longer required
+    // (Telegram Mini App opens /poker/ without DEV params). Synth tests opt out.
+    if (!packOff && !pack && !synthTestActive()) {
+      pack = SELECTED_PACK_ID;
+    }
+    const enabled = !packOff && (
+      filesFlag === '1'
+      || filesFlag.toLowerCase() === 'true'
       || Boolean(pack)
-      || SLOTS.some((slot) => q.has(slot));
+      || SLOTS.some((slot) => q.has(slot))
+    );
     return {
       enabled,
       pack,
