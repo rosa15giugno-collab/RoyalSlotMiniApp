@@ -120,11 +120,20 @@ record('server presentation still calls reel + scatter + FS overlay', () => {
 });
 
 record('playReelSpin resumes audio then start/loop/stops', () => {
-  const reel = sliceFn(appSrc, 'playReelSpin');
-  assert(reel.includes('resumePlayback()'), 'resume after HTTP/decode');
-  assert(reel.includes('playSpin()'), 'reel-start');
-  assert(reel.includes('startReelLoop('), 'reel-loop');
-  assert(reel.includes('playReelStop(index)'), 'reel-stop');
+  const server = sliceFn(appSrc, 'serverSpin');
+  const motion = sliceFn(appSrc, 'runPreparedReelMotion');
+  const motionAt = server.indexOf('runPreparedReelMotion(');
+  const httpAt = server.indexOf('requestPokerSpin');
+  const roundAwaitAt = server.indexOf('await roundPromise');
+  const settleAt = server.indexOf('presentServerRound');
+  assert(motionAt >= 0 && httpAt >= 0 && motionAt < httpAt, 'reel/audio start prima dell\'attesa HTTP');
+  assert(motion.includes('resumePlayback()'), 'resume');
+  assert(motion.includes('playSpin()'), 'reel-start');
+  assert(motion.includes('startReelLoop('), 'reel-loop');
+  assert(motion.includes('playReelStop(index)'), 'reel-stop');
+  assert(motion.includes('stopReelLoop()'), 'reel-loop stop');
+  assert(server.includes('applyServerStripFinals(namesFromServerGrid('), 'server grid authoritative');
+  assert(roundAwaitAt >= 0 && settleAt >= 0 && httpAt < settleAt && roundAwaitAt < settleAt, 'stop/settle dopo risultato server');
 });
 
 record('showFreeSpinOverlay keeps scatter + FS start hooks', () => {
