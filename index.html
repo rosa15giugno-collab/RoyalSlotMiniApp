@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=40">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -41,6 +41,7 @@
             <span class="player-info__balance-value" id="balanceValue">5.000</span>
             <span class="player-info__currency">CHIP</span>
           </span>
+          <span class="payout-badge" id="payoutBadge" hidden></span>
         </div>
       </div>
     </section>
@@ -92,11 +93,14 @@
 
     <div class="win-overlay" id="winOverlay" aria-hidden="true">
       <div class="win-overlay__burst"></div>
-      <p class="win-overlay__title">JACKPOT!</p>
+      <p class="win-overlay__title" id="winOverlayTitle">VINCITA</p>
+      <p class="win-overlay__base" id="winOverlayBase" hidden></p>
+      <p class="win-overlay__bonus" id="winOverlayBonus" hidden></p>
+      <p class="win-overlay__extra" id="winOverlayExtra" hidden></p>
       <p class="win-overlay__amount" id="winOverlayAmount">+0</p>
     </div>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=40"></script>
 </body>
 </html>

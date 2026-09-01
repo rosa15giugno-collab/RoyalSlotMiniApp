@@ -18,7 +18,7 @@ import {
   getGridCell,
   readGridFromReels,
 } from './js/paylines.js';
-import { formatChips } from './js/utils.js';
+import { formatChips, formatPayoutMultiplier } from './js/utils.js';
 import { audio } from './js/audio-manager.js';
 
 const telegram = new TelegramBridge();
@@ -54,7 +54,12 @@ const dom = {
   resultText: document.getElementById('resultText'),
   winValue: document.getElementById('winValue'),
   winOverlay: document.getElementById('winOverlay'),
+  winOverlayTitle: document.getElementById('winOverlayTitle'),
+  winOverlayBase: document.getElementById('winOverlayBase'),
+  winOverlayBonus: document.getElementById('winOverlayBonus'),
+  winOverlayExtra: document.getElementById('winOverlayExtra'),
   winOverlayAmount: document.getElementById('winOverlayAmount'),
+  payoutBadge: document.getElementById('payoutBadge'),
   paylineGuides: document.getElementById('paylineGuides'),
   paylineWins: document.getElementById('paylineWins'),
   reelsWindow: document.querySelector('.reels-window'),
@@ -277,6 +282,26 @@ function buildInitialReels() {
   });
 }
 
+function applyPayoutBadge(payload) {
+  const badge = dom.payoutBadge;
+  if (!badge) return;
+  const payout = Number(payload?.payout_multiplier);
+  const label = formatPayoutMultiplier(payout);
+  const dailyActive = Boolean(payload?.daily_bonus_active);
+  const remaining = Number(payload?.daily_wins_remaining);
+  if (!label) {
+    badge.hidden = true;
+    badge.textContent = '';
+    return;
+  }
+  badge.hidden = false;
+  if (dailyActive && remaining > 0) {
+    badge.textContent = `${label} • ${Math.trunc(remaining)} rimaste`;
+  } else {
+    badge.textContent = label;
+  }
+}
+
 function renderBalance(animate = false) {
   const target = state.balance;
 
@@ -366,6 +391,9 @@ async function loadPlayerProfile() {
     const data = await telegram.fetchBalance();
     if (data && !data.demo && typeof data.balance === 'number') {
       state.balance = data.balance;
+    }
+    if (data && !data.demo) {
+      applyPayoutBadge(data);
     }
   } catch (err) {
     console.warn('[RoyalSlot] Balance load skipped:', err);
@@ -499,11 +527,46 @@ function clearWinEffects() {
   renderPaylineGuidesOverlay();
 }
 
-function showWinOverlay(amount) {
-  if (amount < CONFIG.ui.bigWinThreshold) return;
-  dom.winOverlayAmount.textContent = `+${formatChips(amount)}`;
+function showWinOverlay(amount, bonus = null) {
+  const hasBonus = Boolean(bonus?.applied) && amount > 0;
+  if (!hasBonus && amount < CONFIG.ui.bigWinThreshold) return;
+  const title = dom.winOverlayTitle;
+  const baseEl = dom.winOverlayBase;
+  const bonusEl = dom.winOverlayBonus;
+  const extraEl = dom.winOverlayExtra;
+  if (hasBonus) {
+    const multLabel = formatPayoutMultiplier(bonus.multiplier);
+    if (title) title.textContent = 'VINCITA';
+    if (baseEl) {
+      baseEl.hidden = false;
+      baseEl.textContent = `${formatChips(bonus.baseWin)} CHIPS`;
+    }
+    if (bonusEl) {
+      bonusEl.hidden = false;
+      bonusEl.textContent = `BONUS ${multLabel}!`;
+    }
+    if (extraEl) {
+      extraEl.hidden = !(bonus.extra > 0);
+      extraEl.textContent = bonus.extra > 0 ? `+${formatChips(bonus.extra)} CHIPS` : '';
+    }
+    if (dom.winOverlayAmount) {
+      dom.winOverlayAmount.textContent = `TOTALE ${formatChips(amount)}`;
+    }
+    dom.winOverlay.classList.add('has-bonus');
+  } else {
+    if (title) title.textContent = 'JACKPOT!';
+    if (baseEl) baseEl.hidden = true;
+    if (bonusEl) bonusEl.hidden = true;
+    if (extraEl) extraEl.hidden = true;
+    if (dom.winOverlayAmount) {
+      dom.winOverlayAmount.textContent = `+${formatChips(amount)}`;
+    }
+    dom.winOverlay.classList.remove('has-bonus');
+  }
   dom.winOverlay.classList.add('is-visible');
-  window.setTimeout(() => dom.winOverlay.classList.remove('is-visible'), CONFIG.ui.bigWinOverlayMs);
+  window.setTimeout(() => {
+    dom.winOverlay.classList.remove('is-visible', 'has-bonus');
+  }, hasBonus ? Math.max(CONFIG.ui.bigWinOverlayMs, 2600) : CONFIG.ui.bigWinOverlayMs);
 }
 
 function formatServerWinningSummary(winningLines) {
@@ -564,12 +627,22 @@ async function handleSpin() {
       renderBalance(true);
       renderWin(winAmount);
       playOutcomeSound(winAmount);
+      applyPayoutBadge({
+        payout_multiplier: serverResult.payoutMultiplier,
+        daily_bonus_active: serverResult.dailyBonusActive,
+        daily_wins_remaining: serverResult.dailyWinsRemaining,
+      });
 
       if (winAmount > 0) {
         playWinVisualEffects(winAmount);
         highlightPaylineWins(paylineEvaluation);
         setResult(formatSpinResult(winAmount, state.bet, winningSummary), 'win');
-        showWinOverlay(winAmount);
+        showWinOverlay(winAmount, {
+          applied: Boolean(serverResult.bonusApplied) && !serverResult.replayed,
+          baseWin: Number(serverResult.baseWin) || 0,
+          multiplier: serverResult.payoutMultiplier,
+          extra: Number(serverResult.bonusExtra) || 0,
+        });
         telegram.haptic('success');
       } else {
         setResult(formatSpinResult(0, state.bet), 'loss');

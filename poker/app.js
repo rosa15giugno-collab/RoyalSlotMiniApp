@@ -8,7 +8,7 @@
 
 import { TelegramBridge } from '../js/telegram-bridge.js';
 import { CONFIG } from '../js/config.js';
-import { formatChips } from '../js/utils.js';
+import { formatChips, formatPayoutMultiplier } from '../js/utils.js';
 import {
   ASSETS,
   BETS,
@@ -160,10 +160,15 @@ const dom = {
   fsPips: document.getElementById('fsPips'),
   fsSummaryOverlay: document.getElementById('fsSummaryOverlay'),
   fsSummaryAmount: document.getElementById('fsSummaryAmount'),
+  fsSummaryBonus: document.getElementById('fsSummaryBonus'),
+  fsSummaryTotalRow: document.getElementById('fsSummaryTotalRow'),
+  fsSummaryTotal: document.getElementById('fsSummaryTotal'),
   dailyBadge: document.getElementById('dailyBadge'),
   dailyOverlay: document.getElementById('dailyOverlay'),
   dailyOverlayMult: document.getElementById('dailyOverlayMult'),
   dailyBaseWin: document.getElementById('dailyBaseWin'),
+  dailyExtraRow: document.getElementById('dailyExtraRow'),
+  dailyExtraWin: document.getElementById('dailyExtraWin'),
   dailyFinalWin: document.getElementById('dailyFinalWin'),
   dailyRemaining: document.getElementById('dailyRemaining'),
   mxOverlay: document.getElementById('mysteryOverlay'),
@@ -171,6 +176,7 @@ const dom = {
   mxPips: document.getElementById('mxPips'),
   mxPick: document.getElementById('mxPick'),
   mxPrize: document.getElementById('mxPrize'),
+  mxBonusLine: document.getElementById('mxBonusLine'),
   mxBurst: document.getElementById('mxBurst'),
   paylineGuides: document.getElementById('paylineGuides'),
   paylineWins: document.getElementById('paylineWins'),
@@ -773,13 +779,26 @@ function freeSpinFeatureTotal(spins) {
   }, 0);
 }
 
-function showFreeSpinSummary(total) {
+function showFreeSpinSummary(total, round = null) {
   const overlay = dom.fsSummaryOverlay;
   if (!overlay) return Promise.resolve();
   const raw = Number(total);
   const chips = Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : 0;
+  const payout = Number(round?.payout_multiplier) || 1;
+  const boosted = displayBoostedChips(chips, payout);
+  const bonusLabel = formatPayoutMultiplier(payout);
   if (dom.fsSummaryAmount) {
     dom.fsSummaryAmount.textContent = formatChips(chips);
+  }
+  if (dom.fsSummaryBonus) {
+    const showBonus = Boolean(bonusLabel) && chips > 0 && boosted !== chips;
+    dom.fsSummaryBonus.hidden = !showBonus;
+    dom.fsSummaryBonus.textContent = showBonus ? `BONUS ${bonusLabel}!` : '';
+  }
+  if (dom.fsSummaryTotalRow && dom.fsSummaryTotal) {
+    const showTotal = Boolean(bonusLabel) && chips > 0 && boosted !== chips;
+    dom.fsSummaryTotalRow.hidden = !showTotal;
+    dom.fsSummaryTotal.textContent = formatChips(boosted);
   }
   overlay.classList.remove('is-open');
   overlay.hidden = false;
@@ -799,40 +818,62 @@ function showFreeSpinSummary(total) {
 }
 
 function formatDailyMultiplier(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 1) return '';
-  const shown = Number.isInteger(n) ? String(n) : String(n).replace(/\.0+$/, '');
-  return `x${shown}`;
+  return formatPayoutMultiplier(value);
+}
+
+function displayBoostedChips(base, multiplier) {
+  const n = Number(base);
+  const m = Number(multiplier);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (!Number.isFinite(m) || m <= 1.0000001) return Math.trunc(n);
+  return Math.round(n * m);
 }
 
 function applyDailyBadge(payload) {
   const badge = dom.dailyBadge;
   if (!badge) return;
-  const active = Boolean(payload?.daily_bonus_active);
+  const payout = Number(payload?.payout_multiplier);
+  const label = formatPayoutMultiplier(payout);
+  const dailyActive = Boolean(payload?.daily_bonus_active);
   const remaining = Number(payload?.daily_wins_remaining);
-  const label = formatDailyMultiplier(payload?.daily_bonus_multiplier);
-  if (!active || !label || !(remaining > 0)) {
+  if (!label) {
     badge.hidden = true;
     badge.textContent = '';
     return;
   }
   badge.hidden = false;
-  badge.textContent = `${label} • ${Math.trunc(remaining)} rimaste`;
+  if (dailyActive && remaining > 0) {
+    badge.textContent = `${label} • ${Math.trunc(remaining)} rimaste`;
+  } else {
+    badge.textContent = label;
+  }
 }
 
 function showDailyBonusOverlay(round) {
   const overlay = dom.dailyOverlay;
-  if (!overlay || !round?.daily_applied) return Promise.resolve();
-  const mult = formatDailyMultiplier(round.daily_multiplier);
+  if (!overlay || !round?.bonus_applied || round?.replayed) return Promise.resolve();
+  const payout = Number(round.payout_multiplier) || 1;
+  const mult = formatPayoutMultiplier(payout);
   if (!mult) return Promise.resolve();
-  const base = Number(round.after_level ?? round.base_win ?? 0);
+  const base = Number(round.base_win ?? round.after_level ?? 0);
   const finalWin = Number(round.final_win ?? round.win_amount ?? 0);
+  const extra = Number(round.bonus_extra);
   const remaining = Math.max(0, Math.trunc(Number(round.daily_wins_remaining) || 0));
   if (dom.dailyOverlayMult) dom.dailyOverlayMult.textContent = mult;
   if (dom.dailyBaseWin) dom.dailyBaseWin.textContent = formatChips(Number.isFinite(base) ? base : 0);
   if (dom.dailyFinalWin) dom.dailyFinalWin.textContent = formatChips(Number.isFinite(finalWin) ? finalWin : 0);
+  if (dom.dailyExtraRow && dom.dailyExtraWin) {
+    const extraChips = Number.isFinite(extra) ? extra : Math.max(0, finalWin - base);
+    dom.dailyExtraRow.hidden = !(extraChips > 0);
+    dom.dailyExtraWin.textContent = `+${formatChips(extraChips)}`;
+  }
   if (dom.dailyRemaining) {
-    dom.dailyRemaining.textContent = `${remaining} VINCITE BONUS RIMASTE`;
+    if (round.daily_applied) {
+      dom.dailyRemaining.hidden = false;
+      dom.dailyRemaining.textContent = `${remaining} VINCITE BONUS RIMASTE`;
+    } else {
+      dom.dailyRemaining.hidden = true;
+    }
   }
   overlay.classList.remove('is-open');
   overlay.hidden = false;
@@ -877,6 +918,10 @@ function resetMysteryCards() {
     if (prize) prize.textContent = '';
   });
   if (dom.mxPrize) dom.mxPrize.textContent = '';
+  if (dom.mxBonusLine) {
+    dom.mxBonusLine.hidden = true;
+    dom.mxBonusLine.textContent = '';
+  }
 }
 
 function closeMysteryOverlay() {
@@ -941,12 +986,27 @@ function waitForMysteryCardPick() {
   });
 }
 
-async function revealMysteryCard(card, chips, { credit = true } = {}) {
+async function revealMysteryCard(card, chips, { credit = true, payoutMultiplier = 1 } = {}) {
   if (!card || !(chips > 0)) return;
   const facePrize = card.querySelector('.mx-card__prize');
-  const prizeText = formatChips(chips);
+  const bonusLabel = formatPayoutMultiplier(payoutMultiplier);
+  const boosted = displayBoostedChips(chips, payoutMultiplier);
+  const prizeText = formatChips(bonusLabel ? boosted : chips);
   if (facePrize) facePrize.textContent = prizeText;
-  if (dom.mxPrize) dom.mxPrize.textContent = prizeText;
+  if (dom.mxPrize) {
+    if (bonusLabel && boosted !== chips) {
+      dom.mxPrize.textContent = `PREMIO ${formatChips(chips)} CHIPS`;
+    } else {
+      dom.mxPrize.textContent = prizeText;
+    }
+  }
+  if (dom.mxBonusLine) {
+    const showBonus = Boolean(bonusLabel) && boosted !== chips;
+    dom.mxBonusLine.hidden = !showBonus;
+    dom.mxBonusLine.textContent = showBonus
+      ? `BONUS ${bonusLabel}!  HAI VINTO ${formatChips(boosted)} CHIPS`
+      : '';
+  }
   if (dom.mxOverlay) dom.mxOverlay.classList.add('is-picked');
   pokerAudio.playCardFlip();
   telegram.haptic?.('success');
@@ -966,7 +1026,7 @@ async function revealMysteryCard(card, chips, { credit = true } = {}) {
   telegram.haptic?.('medium');
 }
 
-async function showMysteryOverlay(bonusCount, chips, { credit = true } = {}) {
+async function showMysteryOverlay(bonusCount, chips, { credit = true, payoutMultiplier = 1 } = {}) {
   if (!dom.mxOverlay || !(chips > 0)) return;
   setMysteryPips(bonusCount);
   if (dom.mxCount) dom.mxCount.textContent = mysteryCountLabel(bonusCount);
@@ -985,7 +1045,7 @@ async function showMysteryOverlay(bonusCount, chips, { credit = true } = {}) {
   pokerAudio.startMysteryBed();
   const chosen = await waitForMysteryCardPick();
   if (chosen) {
-    await revealMysteryCard(chosen, chips, { credit });
+    await revealMysteryCard(chosen, chips, { credit, payoutMultiplier });
     await wait(MX_REVEAL_MS);
   }
   clearBonusHighlights();
@@ -1469,7 +1529,7 @@ function settlementFromServerPaid(round, evalResult) {
   };
 }
 
-async function runServerFreeSpins(spins) {
+async function runServerFreeSpins(spins, round = null) {
   state.inFreeSpins = true;
   const first = Array.isArray(spins) && spins[0] ? spins[0] : null;
   state.freeSpinsLeft = Number.isFinite(Number(first?.remaining_before))
@@ -1512,7 +1572,7 @@ async function runServerFreeSpins(spins) {
         await showMysteryOverlay(
           Number(mystery.bonus_count || evalResult.bonus.count),
           mysteryCredit,
-          { credit: false },
+          { credit: false, payoutMultiplier: Number(round?.payout_multiplier) || 1 },
         );
       }
       if (Number(fs.retrigger_awarded) > 0 && Number.isFinite(Number(fs.remaining_before))) {
@@ -1533,7 +1593,7 @@ async function runServerFreeSpins(spins) {
     updateFsRemain();
     await pokerAudio.stopFreeSpinLoop({ fadeSec: 0.4 });
     pokerAudio.playFreeSpinEnd(fsCredit > 0);
-    await showFreeSpinSummary(freeSpinFeatureTotal(spins));
+    await showFreeSpinSummary(freeSpinFeatureTotal(spins), round);
   }
 }
 
@@ -1542,6 +1602,7 @@ async function presentServerRound(round, { applyBalance = true, skipPaidVisual =
     throw new Error('Invalid poker spin response');
   }
   state.serverAuthoritative = true;
+  state.lastServerRound = round;
   if (typeof round.bet === 'number' && Number.isFinite(round.bet) && round.bet > 0) {
     state.lockedBet = round.bet;
   }
@@ -1563,6 +1624,7 @@ async function presentServerRound(round, { applyBalance = true, skipPaidVisual =
   if (settlement.mystery?.triggered && settlement.mysteryCredit > 0) {
     await showMysteryOverlay(evalResult.bonus.count, settlement.mysteryCredit, {
       credit: false,
+      payoutMultiplier: Number(round.payout_multiplier) || 1,
     });
     state.mysteryCredited = true;
   }
@@ -1572,11 +1634,11 @@ async function presentServerRound(round, { applyBalance = true, skipPaidVisual =
       round.paid_spin.scatter_count,
       awarded,
     );
-    await runServerFreeSpins(round.free_spins || []);
+    await runServerFreeSpins(round.free_spins || [], round);
   } else if (settlement.mystery?.triggered) {
     await playWinHighlight(evalResult, settlement.lineScatterCredit);
   }
-  if (round.daily_applied && !round.replayed) {
+  if (round.bonus_applied && !round.replayed) {
     await showDailyBonusOverlay(round);
   }
   applyDailyBadge(round);

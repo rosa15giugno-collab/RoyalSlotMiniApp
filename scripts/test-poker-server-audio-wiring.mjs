@@ -149,7 +149,7 @@ record('FS loop starts once and ends with approved fade', () => {
   assert(!serverFs.includes('startFreeSpinLoop'), 'no FS loop per giro');
   assert(serverFs.includes('stopFreeSpinLoop({ fadeSec: 0.4 })'), 'fade 0.4');
   assert(serverFs.includes('playFreeSpinEnd('), 'fs end');
-  assert(serverFs.includes('showFreeSpinSummary(freeSpinFeatureTotal(spins))'), 'FS summary display');
+  assert(serverFs.includes('showFreeSpinSummary(freeSpinFeatureTotal(spins), round)'), 'FS summary display');
 });
 
 record('FS_TOTAL sums only server free_spins.base_win', () => {
@@ -187,7 +187,8 @@ record('daily multiplier UX is server-driven', () => {
   assert(appSrc.includes('showDailyBonusOverlay('), 'overlay helper');
   assert(appSrc.includes('daily_bonus_active'), 'uses server active flag');
   assert(appSrc.includes('daily_wins_remaining'), 'uses server remaining');
-  assert(appSrc.includes('daily_applied'), 'overlay only if applied');
+  assert(appSrc.includes('bonus_applied'), 'overlay if chip bonus applied');
+  assert(appSrc.includes('payout_multiplier'), 'uses server payout multiplier');
   const present = sliceFn(appSrc, 'presentServerRound');
   assert(present.includes('showDailyBonusOverlay(round)'), 'overlay from server round');
   assert(present.includes('applyDailyBadge(round)'), 'badge from server round');

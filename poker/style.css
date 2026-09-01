@@ -213,6 +213,29 @@ body {
   margin: 8px 0 0;
 }
 
+.daily-overlay__bonus {
+  color: #fff3b0;
+  text-shadow:
+    0 0 16px rgba(255, 213, 106, 0.9),
+    0 0 28px rgba(212, 175, 55, 0.5);
+  animation: pokerBonusPulse 1.1s ease-in-out infinite;
+}
+
+.fs-overlay__bonus,
+.mx-overlay__bonus {
+  margin: 8px 0 0;
+  font-family: 'Cinzel', serif;
+  font-size: 1.15rem;
+  letter-spacing: 0.12em;
+  color: #fff3b0;
+  text-shadow: 0 0 14px rgba(255, 213, 106, 0.8);
+}
+
+@keyframes pokerBonusPulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.07); filter: brightness(1.22); }
+}
+
 .win-plaque {
   position: absolute;
   left: 50%;

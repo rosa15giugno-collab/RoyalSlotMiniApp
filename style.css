@@ -214,6 +214,18 @@ body {
   flex-wrap: wrap;
 }
 
+.payout-badge {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1a1204;
+  background: linear-gradient(180deg, #ffe7a0 0%, #d4af37 100%);
+  box-shadow: 0 0 10px rgba(255, 213, 106, 0.45);
+}
+
 .player-info__balance-value {
   font-size: 1.45rem;
   font-weight: 700;
@@ -782,12 +794,17 @@ body {
 }
 
 .win-overlay.is-visible .win-overlay__title,
-.win-overlay.is-visible .win-overlay__amount {
+.win-overlay.is-visible .win-overlay__amount,
+.win-overlay.is-visible .win-overlay__bonus {
   animation: bigWinEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .win-overlay.is-visible .win-overlay__amount {
   animation-delay: 0.08s;
+}
+
+.win-overlay.has-bonus .win-overlay__bonus {
+  animation: bonusPulse 1.1s ease-in-out infinite;
 }
 
 .win-overlay__burst {
@@ -841,6 +858,34 @@ body {
   font-weight: 700;
   color: var(--led-gold);
   text-shadow: 0 0 18px rgba(255, 213, 106, 0.5);
+}
+
+.win-overlay__base,
+.win-overlay__extra {
+  position: relative;
+  margin: 4px 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(255, 246, 204, 0.86);
+}
+
+.win-overlay__bonus {
+  position: relative;
+  margin: 10px 0 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #fff3b0;
+  text-shadow:
+    0 0 16px rgba(255, 213, 106, 0.9),
+    0 0 28px rgba(212, 175, 55, 0.55);
+}
+
+@keyframes bonusPulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.08); filter: brightness(1.25); }
 }
 
 @keyframes winTitle {

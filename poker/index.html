@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -116,6 +116,7 @@
             </button>
           </div>
           <p class="mx-overlay__live" id="mxPrize" aria-live="polite"></p>
+          <p class="mx-overlay__bonus" id="mxBonusLine" hidden></p>
         </div>
         <div class="mx-overlay__flash" id="mxFlash" aria-hidden="true"></div>
         <div class="mx-overlay__burst" id="mxBurst" aria-hidden="true"></div>
@@ -157,19 +158,29 @@
             <span class="fs-overlay__count" id="fsSummaryAmount">0</span>
             <span class="fs-overlay__unit">CHIPS</span>
           </p>
+          <p class="fs-overlay__bonus" id="fsSummaryBonus" hidden></p>
+          <p class="fs-overlay__award" id="fsSummaryTotalRow" hidden>
+            <span class="fs-overlay__unit">TOTALE</span>
+            <span class="fs-overlay__count" id="fsSummaryTotal">0</span>
+            <span class="fs-overlay__unit">CHIPS</span>
+          </p>
         </div>
       </div>
       <div class="fs-overlay fs-overlay--daily" id="dailyOverlay" hidden aria-hidden="true">
         <div class="fs-overlay__scrim"></div>
         <div class="fs-overlay__panel" role="dialog" aria-modal="true" aria-labelledby="dailyTitle">
-          <p class="fs-overlay__label" id="dailyTitle">BONUS GIORNALIERO <span id="dailyOverlayMult">x2</span></p>
+          <p class="fs-overlay__label daily-overlay__bonus" id="dailyTitle">BONUS <span id="dailyOverlayMult">×2</span>!</p>
           <p class="daily-overlay__row">
-            <span class="fs-overlay__unit">VINCITA BASE</span>
+            <span class="fs-overlay__unit">VINCITA</span>
             <span class="fs-overlay__count" id="dailyBaseWin">0</span>
             <span class="fs-overlay__unit">CHIPS</span>
           </p>
+          <p class="daily-overlay__row" id="dailyExtraRow" hidden>
+            <span class="fs-overlay__count" id="dailyExtraWin">+0</span>
+            <span class="fs-overlay__unit">CHIPS</span>
+          </p>
           <p class="daily-overlay__row">
-            <span class="fs-overlay__unit">VINCITA BONUS</span>
+            <span class="fs-overlay__unit">TOTALE</span>
             <span class="fs-overlay__count" id="dailyFinalWin">0</span>
             <span class="fs-overlay__unit">CHIPS</span>
           </p>
@@ -178,6 +189,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="app.js?v=34"></script>
+  <script type="module" src="app.js?v=35"></script>
 </body>
 </html>

@@ -138,6 +138,8 @@ export class TelegramBridge {
       daily_bonus_active: Boolean(data.daily_bonus_active),
       daily_bonus_multiplier: Number(data.daily_bonus_multiplier) || 1,
       daily_wins_remaining: Number(data.daily_wins_remaining) || 0,
+      profile_level_multiplier: Number(data.profile_level_multiplier) || 1,
+      payout_multiplier: Number(data.payout_multiplier) || 1,
       demo: false,
     };
   }
@@ -181,6 +183,13 @@ export class TelegramBridge {
       winningLines: data.winning_lines ?? [],
       winAmount: data.win_amount ?? data.final_win ?? 0,
       baseWin: data.base_win,
+      payoutMultiplier: Number(data.payout_multiplier) || 1,
+      bonusApplied: Boolean(data.bonus_applied),
+      bonusExtra: Number(data.bonus_extra) || 0,
+      dailyApplied: Boolean(data.daily_applied),
+      dailyWinsRemaining: Number(data.daily_wins_remaining) || 0,
+      dailyBonusActive: Boolean(data.daily_bonus_active),
+      dailyBonusMultiplier: Number(data.daily_bonus_multiplier) || 1,
       balanceBefore: data.balance_before,
       balanceAfter: data.balance_after,
       referenceId: data.reference_id,
