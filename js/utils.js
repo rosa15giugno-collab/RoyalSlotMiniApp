@@ -8,3 +8,15 @@ export function formatPayoutMultiplier(value) {
   if (Number.isInteger(n)) return `×${n}`;
   return `×${String(n).replace('.', ',')}`;
 }
+
+const VIP_TIER_LABELS = { 1: 'BRONZE', 2: 'SILVER', 3: 'GOLD' };
+
+export function vipTierLabel(vipLevel) {
+  return VIP_TIER_LABELS[Number(vipLevel)] || '';
+}
+
+export function shouldShowVipSecondChance(payload) {
+  return Boolean(
+    payload?.vip_second_chance_triggered && payload?.vip_second_chance_result_used,
+  );
+}

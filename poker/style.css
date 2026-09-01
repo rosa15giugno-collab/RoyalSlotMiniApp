@@ -209,6 +209,21 @@ body {
   z-index: 22;
 }
 
+.fs-overlay--vip {
+  z-index: 23;
+}
+
+.vip-overlay__tier {
+  color: #ffe7a3;
+  letter-spacing: 0.16em;
+}
+
+.vip-overlay__title {
+  margin-top: 10px;
+  color: #fff8dc;
+  animation: pokerBonusPulse 1.1s ease-in-out infinite;
+}
+
 .daily-overlay__row {
   margin: 8px 0 0;
 }

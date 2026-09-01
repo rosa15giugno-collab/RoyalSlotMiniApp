@@ -8,7 +8,7 @@
 
 import { TelegramBridge } from '../js/telegram-bridge.js';
 import { CONFIG } from '../js/config.js';
-import { formatChips, formatPayoutMultiplier } from '../js/utils.js';
+import { formatChips, formatPayoutMultiplier, shouldShowVipSecondChance, vipTierLabel } from '../js/utils.js';
 import {
   ASSETS,
   BETS,
@@ -171,6 +171,9 @@ const dom = {
   dailyExtraWin: document.getElementById('dailyExtraWin'),
   dailyFinalWin: document.getElementById('dailyFinalWin'),
   dailyRemaining: document.getElementById('dailyRemaining'),
+  vipOverlay: document.getElementById('vipOverlay'),
+  vipOverlayTier: document.getElementById('vipOverlayTier'),
+  vipOverlayTitle: document.getElementById('vipOverlayTitle'),
   mxOverlay: document.getElementById('mysteryOverlay'),
   mxCount: document.getElementById('mxCount'),
   mxPips: document.getElementById('mxPips'),
@@ -847,6 +850,29 @@ function applyDailyBadge(payload) {
   } else {
     badge.textContent = label;
   }
+}
+
+function showVipSecondChanceOverlay(round) {
+  const overlay = dom.vipOverlay;
+  if (!overlay || !shouldShowVipSecondChance(round) || round?.replayed) {
+    return Promise.resolve();
+  }
+  const tier = vipTierLabel(round.vip_level);
+  if (dom.vipOverlayTier) {
+    dom.vipOverlayTier.textContent = tier ? `VIP ${tier}` : 'BONUS VIP';
+  }
+  if (dom.vipOverlayTitle) {
+    dom.vipOverlayTitle.textContent = 'SECONDA CHANCE!';
+  }
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+      resolve();
+    }, 1800);
+  });
 }
 
 function showDailyBonusOverlay(round) {
@@ -1601,6 +1627,7 @@ async function presentServerRound(round, { applyBalance = true, skipPaidVisual =
   if (!round?.paid_spin?.grid) {
     throw new Error('Invalid poker spin response');
   }
+  await showVipSecondChanceOverlay(round);
   state.serverAuthoritative = true;
   state.lastServerRound = round;
   if (typeof round.bet === 'number' && Number.isFinite(round.bet) && round.bet > 0) {

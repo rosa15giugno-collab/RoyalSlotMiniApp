@@ -195,6 +195,9 @@ export class TelegramBridge {
       referenceId: data.reference_id,
       replayed: Boolean(data.replayed),
       xpAwarded: data.xp_awarded,
+      vipLevel: Number(data.vip_level) || 0,
+      vipSecondChanceTriggered: Boolean(data.vip_second_chance_triggered),
+      vipSecondChanceResultUsed: Boolean(data.vip_second_chance_result_used),
     };
   }
 

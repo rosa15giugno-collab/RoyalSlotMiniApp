@@ -235,6 +235,41 @@ record('WAV selected-v1 invariati', () => {
   });
 });
 
+const royaleHtml = readFileSync(join(root, 'index.html'), 'utf8');
+const royaleApp = readFileSync(join(root, 'app.js'), 'utf8');
+const pokerHtml = readFileSync(join(root, 'poker/index.html'), 'utf8');
+const utilsSrc = readFileSync(join(root, 'js/utils.js'), 'utf8');
+const bridgeSrc = readFileSync(join(root, 'js/telegram-bridge.js'), 'utf8');
+
+record('Royale HTML: vip overlay presente', () => {
+  assert(royaleHtml.includes('id="vipOverlay"'), 'vipOverlay');
+  assert(royaleHtml.includes('id="vipOverlayTier"'), 'vipOverlayTier');
+});
+
+record('Royale app: showVipSecondChanceOverlay collegato', () => {
+  assert(royaleApp.includes('function showVipSecondChanceOverlay'), 'fn');
+  assert(royaleApp.includes('showVipSecondChanceOverlay(serverResult)'), 'call');
+});
+
+record('Poker HTML: vip overlay presente', () => {
+  assert(pokerHtml.includes('id="vipOverlay"'), 'vipOverlay');
+});
+
+record('Poker app: showVipSecondChanceOverlay collegato', () => {
+  assert(appSrc.includes('function showVipSecondChanceOverlay'), 'fn');
+  assert(appSrc.includes('await showVipSecondChanceOverlay(round)'), 'call');
+});
+
+record('utils: shouldShowVipSecondChance richiede entrambi i flag', () => {
+  assert(utilsSrc.includes('vip_second_chance_triggered'), 'triggered');
+  assert(utilsSrc.includes('vip_second_chance_result_used'), 'result_used');
+});
+
+record('bridge spin: campi VIP esposti', () => {
+  assert(bridgeSrc.includes('vipSecondChanceTriggered'), 'vip triggered');
+  assert(bridgeSrc.includes('vipSecondChanceResultUsed'), 'vip result used');
+});
+
 const failed = results.filter((row) => !row.ok);
 console.log('');
 console.log(`${results.length - failed.length}/${results.length} pass`);

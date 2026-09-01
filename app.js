@@ -18,7 +18,7 @@ import {
   getGridCell,
   readGridFromReels,
 } from './js/paylines.js';
-import { formatChips, formatPayoutMultiplier } from './js/utils.js';
+import { formatChips, formatPayoutMultiplier, shouldShowVipSecondChance, vipTierLabel } from './js/utils.js';
 import { audio } from './js/audio-manager.js';
 
 const telegram = new TelegramBridge();
@@ -60,6 +60,9 @@ const dom = {
   winOverlayExtra: document.getElementById('winOverlayExtra'),
   winOverlayAmount: document.getElementById('winOverlayAmount'),
   payoutBadge: document.getElementById('payoutBadge'),
+  vipOverlay: document.getElementById('vipOverlay'),
+  vipOverlayTier: document.getElementById('vipOverlayTier'),
+  vipOverlayTitle: document.getElementById('vipOverlayTitle'),
   paylineGuides: document.getElementById('paylineGuides'),
   paylineWins: document.getElementById('paylineWins'),
   reelsWindow: document.querySelector('.reels-window'),
@@ -527,6 +530,33 @@ function clearWinEffects() {
   renderPaylineGuidesOverlay();
 }
 
+function showVipSecondChanceOverlay(serverResult) {
+  if (!shouldShowVipSecondChance({
+    vip_second_chance_triggered: serverResult.vipSecondChanceTriggered,
+    vip_second_chance_result_used: serverResult.vipSecondChanceResultUsed,
+  })) return Promise.resolve();
+  const overlay = dom.vipOverlay;
+  if (!overlay) return Promise.resolve();
+  const tier = vipTierLabel(serverResult.vipLevel);
+  if (dom.vipOverlayTier) {
+    dom.vipOverlayTier.textContent = tier ? `VIP ${tier}` : 'BONUS VIP';
+  }
+  if (dom.vipOverlayTitle) {
+    dom.vipOverlayTitle.textContent = 'SECONDA CHANCE!';
+  }
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('is-visible');
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      overlay.classList.remove('is-visible');
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+      resolve();
+    }, 1800);
+  });
+}
+
 function showWinOverlay(amount, bonus = null) {
   const hasBonus = Boolean(bonus?.applied) && amount > 0;
   if (!hasBonus && amount < CONFIG.ui.bigWinThreshold) return;
@@ -616,6 +646,8 @@ async function handleSpin() {
       }
 
       await runReelAnimations((index) => serverResult.grid[index]);
+
+      await showVipSecondChanceOverlay(serverResult);
 
       const winAmount = serverResult.winAmount;
       const winningSummary = formatServerWinningSummary(serverResult.winningLines);

@@ -898,6 +898,54 @@ body {
   to { background-position: 200% center; }
 }
 
+.vip-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.vip-overlay.is-visible {
+  opacity: 1;
+}
+
+.vip-overlay__burst {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.28), transparent 62%);
+}
+
+.vip-overlay__tier {
+  position: relative;
+  margin: 0 0 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #ffe7a3;
+  text-shadow: 0 0 18px rgba(255, 213, 106, 0.85);
+}
+
+.vip-overlay__title {
+  position: relative;
+  margin: 0;
+  font-family: 'Cinzel', serif;
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff8dc;
+  text-shadow:
+    0 0 16px rgba(255, 213, 106, 0.9),
+    0 0 28px rgba(212, 175, 55, 0.55);
+  animation: bonusPulse 1.1s ease-in-out infinite;
+}
+
 .is-spinning .slot-machine__frame {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.06),
