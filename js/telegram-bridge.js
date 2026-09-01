@@ -135,6 +135,9 @@ export class TelegramBridge {
     const data = await response.json();
     return {
       balance: typeof data.balance === 'number' ? data.balance : data.chips,
+      daily_bonus_active: Boolean(data.daily_bonus_active),
+      daily_bonus_multiplier: Number(data.daily_bonus_multiplier) || 1,
+      daily_wins_remaining: Number(data.daily_wins_remaining) || 0,
       demo: false,
     };
   }

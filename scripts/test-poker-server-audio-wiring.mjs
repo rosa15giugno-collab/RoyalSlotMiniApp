@@ -149,6 +149,49 @@ record('FS loop starts once and ends with approved fade', () => {
   assert(!serverFs.includes('startFreeSpinLoop'), 'no FS loop per giro');
   assert(serverFs.includes('stopFreeSpinLoop({ fadeSec: 0.4 })'), 'fade 0.4');
   assert(serverFs.includes('playFreeSpinEnd('), 'fs end');
+  assert(serverFs.includes('showFreeSpinSummary(freeSpinFeatureTotal(spins))'), 'FS summary display');
+});
+
+record('FS_TOTAL sums only server free_spins.base_win', () => {
+  const fnSrc = sliceFn(appSrc, 'freeSpinFeatureTotal');
+  const summarySrc = sliceFn(appSrc, 'showFreeSpinSummary');
+  const runSrc = sliceFn(appSrc, 'runServerFreeSpins');
+  assert(fnSrc.includes('base_win'), 'base_win only');
+  assert(!summarySrc.includes('requestPokerSpin'), 'no extra request');
+  assert(!summarySrc.includes('creditAmount'), 'no extra credit');
+  assert(!runSrc.includes('createSpinReferenceId'), 'no extra reference');
+  const fn = new Function(`${fnSrc}; return freeSpinFeatureTotal;`)();
+  assertEqual(fn([{ base_win: 100 }, { base_win: 500 }, { base_win: 0 }, { base_win: 1000 }, { base_win: 0 }]), 1600, 'A 1600');
+  assertEqual(fn([{ base_win: 0 }, { base_win: 0 }, { base_win: 0 }, { base_win: 0 }, { base_win: 0 }]), 0, 'B 0');
+  assertEqual(
+    fn([{ base_win: 350, mystery: { reward_chips: 250 } }, { base_win: 80 }]),
+    430,
+    'FS bonus already inside base_win',
+  );
+});
+
+record('server FS presents retrigger remaining and Pick a Card without extra credit', () => {
+  const runSrc = sliceFn(appSrc, 'runServerFreeSpins');
+  assert(runSrc.includes('remaining_after'), 'HUD remaining_after');
+  assert(runSrc.includes('remaining_before'), 'HUD remaining_before');
+  assert(runSrc.includes('retrigger_awarded'), 'present retrigger_awarded');
+  assert(runSrc.includes('showMysteryOverlay'), 'Pick a Card on FS BONUS');
+  assert(runSrc.includes('credit: false'), 'no frontend FS bonus credit');
+  assert(!runSrc.includes('scatterFsRetriggerAwarded'), 'no client retrigger math');
+  assert(!runSrc.includes('settleGuaranteedCashBonus'), 'no client bonus draw');
+  assert(!runSrc.includes('Math.random'), 'no client RNG');
+});
+
+record('daily multiplier UX is server-driven', () => {
+  assert(appSrc.includes('applyDailyBadge('), 'badge helper');
+  assert(appSrc.includes('showDailyBonusOverlay('), 'overlay helper');
+  assert(appSrc.includes('daily_bonus_active'), 'uses server active flag');
+  assert(appSrc.includes('daily_wins_remaining'), 'uses server remaining');
+  assert(appSrc.includes('daily_applied'), 'overlay only if applied');
+  const present = sliceFn(appSrc, 'presentServerRound');
+  assert(present.includes('showDailyBonusOverlay(round)'), 'overlay from server round');
+  assert(present.includes('applyDailyBadge(round)'), 'badge from server round');
+  assert(!present.includes('bonus_games_left - 1'), 'no local decrement');
 });
 
 record('timing rulli invariato', () => {

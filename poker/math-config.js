@@ -609,11 +609,20 @@ export function validateMathConfig(paylines = PAYLINE_DEFINITIONS, pack = MATH_V
   }
 }
 
-/** 3→5, 4→7, count >= 5 → awards[5] (10 FS). */
+/** 3→5, 4→7, count >= 5 → awards[5] (10 FS). Paid-spin award only. */
 export function scatterFreeSpinsAwarded(count, scatterFeature) {
   if (!scatterFeature?.awards) return 0;
   if (count >= 5) return scatterFeature.awards[5] || 0;
   return scatterFeature.awards[count] || 0;
+}
+
+/** Retrigger during an active Free Spin feature. Paid scatter table is unchanged. */
+export const FS_RETRIGGER_SPINS = Object.freeze({ 3: 1, 4: 3, 5: 5 });
+export const MAX_FS_RETRIGGERS = 2;
+
+export function scatterFsRetriggerAwarded(count) {
+  if (count >= 5) return FS_RETRIGGER_SPINS[5];
+  return FS_RETRIGGER_SPINS[count] || 0;
 }
 
 export function bonusCountTier(count) {
@@ -663,6 +672,44 @@ export function settleGuaranteedCashBonus(
   const bonusReturn = stake * row.x;
   if (!(bonusReturn > 0)) {
     throw new PokerMathConfigError(`Mystery payout non positivo: x=${row.x}`);
+  }
+  return { triggered: true, tier, x: row.x, bonusReturn };
+}
+
+/** Dedicated Free Spin Mystery (T1 Scala). Paid spin keeps BONUS_MYSTERY_D_V5. */
+export const BONUS_MYSTERY_FS_T1 = Object.freeze({
+  3: Object.freeze([
+    Object.freeze({ w: 80, x: 1 }),
+    Object.freeze({ w: 15, x: 2 }),
+    Object.freeze({ w: 5, x: 3 }),
+  ]),
+  4: Object.freeze([
+    Object.freeze({ w: 75, x: 2 }),
+    Object.freeze({ w: 20, x: 3 }),
+    Object.freeze({ w: 5, x: 5 }),
+  ]),
+  5: Object.freeze([
+    Object.freeze({ w: 50, x: 4 }),
+    Object.freeze({ w: 30, x: 5 }),
+    Object.freeze({ w: 15, x: 8 }),
+    Object.freeze({ w: 5, x: 10 }),
+  ]),
+});
+
+export function settleFsCashBonus(
+  evalResult,
+  rng = Math.random,
+  totalBet = SIM_BET.TOTAL_BET,
+) {
+  const tier = bonusCountTier(evalResult.bonus.count);
+  if (!tier) {
+    return { triggered: false, tier: 0, x: 0, bonusReturn: 0 };
+  }
+  const row = pickWeightedRow(BONUS_MYSTERY_FS_T1[tier], rng);
+  const stake = totalBet > 0 ? totalBet : SIM_BET.TOTAL_BET;
+  const bonusReturn = stake * row.x;
+  if (!(bonusReturn > 0)) {
+    throw new PokerMathConfigError(`FS Mystery payout non positivo: x=${row.x}`);
   }
   return { triggered: true, tier, x: row.x, bonusReturn };
 }

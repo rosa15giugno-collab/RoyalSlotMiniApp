@@ -111,19 +111,40 @@ function dumpRound(round, wallet) {
     scatter_triggered: round.scatterTriggered,
     trigger_scatter_count: round.triggerScatterCount,
     free_spins_generated: round.freeSpinsGenerated,
-    free_spins: round.freeSpins.map((fs, index) => ({
-      index,
-      grid: fs.grid,
-      evaluated: serializeEval(fs.evaluated),
-      settled: {
-        line_return: fs.settled.lineReturn,
-        scatter_return: fs.settled.scatterReturn,
-        total_return: fs.settled.totalReturn,
-      },
-      base_win: toWalletChips(
+    free_spins_initial: round.freeSpinsInitial,
+    retrigger_count: round.retriggerCount,
+    free_spins: round.freeSpins.map((fs, index) => {
+      const lineScatter = toWalletChips(
         (fs.settled.lineReturn || 0) + (fs.settled.scatterReturn || 0),
-      ),
-    })),
+      );
+      const mysteryChips = toWalletChips(fs.settled.bonusReturn || 0);
+      const mystery = fs.bonusDraw
+        ? {
+            triggered: true,
+            tier: fs.bonusDraw.tier,
+            x: fs.bonusDraw.x,
+            bonus_return: fs.bonusDraw.bonusReturn,
+            reward_chips: mysteryChips,
+          }
+        : null;
+      return {
+        index,
+        grid: fs.grid,
+        evaluated: serializeEval(fs.evaluated),
+        settled: {
+          line_return: fs.settled.lineReturn,
+          scatter_return: fs.settled.scatterReturn,
+          bonus_return: fs.settled.bonusReturn || 0,
+          total_return: fs.settled.totalReturn,
+        },
+        base_win: lineScatter + mysteryChips,
+        mystery,
+        retrigger_awarded: fs.retriggerAwarded || 0,
+        remaining_before: fs.remainingBefore,
+        remaining_after: fs.remainingAfter,
+        retrigger_blocked: Boolean(fs.retriggerBlocked),
+      };
+    }),
     wallet: {
       paid_line_scatter: wallet.paidLineScatter,
       mystery: wallet.mystery,

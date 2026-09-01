@@ -33,7 +33,8 @@ export function toWalletChips(amount) {
 /**
  * Mirror the live game's credit events for one paid round (option B).
  * Paid spin credits line+scatter as one amount; Mystery is a separate credit;
- * each Free Spin credits its own line+scatter. Mystery is not drawn on FS.
+ * each Free Spin credits its own line+scatter, plus Mystery if the server
+ * drew BONUS during that Free Spin. Paid-spin Mystery stays a separate credit.
  *
  * `once` is option A (round the whole feature total) — reference only.
  */
@@ -50,6 +51,7 @@ export function walletCreditsForRound(round) {
     freeSpins += toWalletChips(
       (settled.lineReturn || 0) + (settled.scatterReturn || 0),
     );
+    freeSpins += toWalletChips(settled.bonusReturn || 0);
   }
   return {
     paidLineScatter,

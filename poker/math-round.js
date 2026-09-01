@@ -9,6 +9,7 @@
  *     BONUS during free spins does not draw the mystery table.
  * V5: same as V4 except Mystery D chip scale and LINE_SCALE_RATIO_V5.
  * V6: V5 economy + optional active-payline subset; betPerLine = totalBet / N.
+ *     During FS: scatter retrigger 3→+3 / 4→+5 / 5→+7 (max 2); Mystery BONUS may fire.
  */
 
 import { evaluateGrid } from './engine.js';
@@ -17,7 +18,10 @@ import {
   SIM_BET,
   assertSimGrid,
   isGuaranteedCashBonus,
+  MAX_FS_RETRIGGERS,
   scatterFreeSpinsAwarded,
+  scatterFsRetriggerAwarded,
+  settleFsCashBonus,
   settleGuaranteedCashBonus,
   settleSimulatedSpin,
 } from './math-config.js';
@@ -64,6 +68,8 @@ export function playPaidRound({
   paylines = PAYLINE_DEFINITIONS,
   bonusRng = Math.random,
   totalBet = SIM_BET.TOTAL_BET,
+  fsRetrigger = true,
+  fsBonus = true,
 }) {
   if (typeof nextGrid !== 'function') {
     throw new Error('playPaidRound: nextGrid è obbligatorio');
@@ -92,27 +98,76 @@ export function playPaidRound({
   const award = resolveFeatureAward(pack, baseEval);
 
   const freeSpins = [];
-  if (award.awarded > 0) {
-    for (let i = 0; i < award.awarded; i += 1) {
-      const grid = nextGrid().slice();
-      assertSimGrid(grid);
-      const evaluated = evaluateGrid(grid, paylines);
-      const settled = settleSimulatedSpin(evaluated, symbols, settleOpts);
-      freeSpins.push({
-        grid,
-        evaluated,
-        settled,
-        bonusCount: evaluated.bonus.count,
-        scatterCount: evaluated.scatter.count,
-        lineWinCount: evaluated.lineWins.length,
-        triggeredForRetrigger: false,
-      });
+  let remaining = award.awarded;
+  let retriggerCount = 0;
+  const allowRetrigger = Boolean(fsRetrigger && pack.scatterFeature);
+  const allowFsBonus = Boolean(fsBonus && isGuaranteedCashBonus(pack.bonusFeature));
+  while (remaining > 0) {
+    const remainingBefore = remaining;
+    const grid = nextGrid().slice();
+    assertSimGrid(grid);
+    const evaluated = evaluateGrid(grid, paylines);
+    const lineSettle = settleSimulatedSpin(evaluated, symbols, settleOpts);
+    remaining -= 1;
+
+    let retriggerAwarded = 0;
+    let retriggerBlocked = false;
+    const extra = pack.scatterFeature
+      ? scatterFsRetriggerAwarded(evaluated.scatter.count)
+      : 0;
+    if (extra > 0) {
+      if (allowRetrigger && retriggerCount < MAX_FS_RETRIGGERS) {
+        remaining += extra;
+        retriggerAwarded = extra;
+        retriggerCount += 1;
+      } else {
+        retriggerBlocked = true;
+      }
     }
+
+    let bonusDraw = null;
+    let bonusReturn = 0;
+    if (allowFsBonus) {
+      const cashFs = settleFsCashBonus(evaluated, bonusRng, stake);
+      if (cashFs.triggered) {
+        bonusDraw = cashFs;
+        bonusReturn = cashFs.bonusReturn;
+      }
+    }
+
+    const settled = bonusReturn > 0
+      ? {
+          lineReturn: lineSettle.lineReturn,
+          scatterReturn: lineSettle.scatterReturn,
+          bonusReturn,
+          totalReturn: lineSettle.totalReturn + bonusReturn,
+        }
+      : lineSettle;
+
+    freeSpins.push({
+      grid,
+      evaluated,
+      settled,
+      bonusCount: evaluated.bonus.count,
+      scatterCount: evaluated.scatter.count,
+      lineWinCount: evaluated.lineWins.length,
+      triggeredForRetrigger: retriggerAwarded > 0,
+      bonusDraw,
+      retriggerAwarded,
+      retriggerCount,
+      retriggerBlocked,
+      remainingBefore,
+      remainingAfter: remaining,
+    });
   }
 
   const freeSpinReturn = freeSpins.reduce((sum, fs) => sum + fs.settled.totalReturn, 0);
   const freeSpinLineReturn = freeSpins.reduce((sum, fs) => sum + fs.settled.lineReturn, 0);
   const freeSpinScatterReturn = freeSpins.reduce((sum, fs) => sum + fs.settled.scatterReturn, 0);
+  const freeSpinBonusReturn = freeSpins.reduce(
+    (sum, fs) => sum + (fs.settled.bonusReturn || 0),
+    0,
+  );
 
   return {
     paidBet: stake,
@@ -124,10 +179,13 @@ export function playPaidRound({
     scatterTriggered: award.scatterTriggered,
     triggerScatterCount: award.triggerScatterCount,
     freeSpinsGenerated: freeSpins.length,
+    freeSpinsInitial: award.awarded,
+    retriggerCount,
     freeSpins,
     freeSpinReturn,
     freeSpinLineReturn,
     freeSpinScatterReturn,
+    freeSpinBonusReturn,
     totalRoundReturn: baseSettle.totalReturn + freeSpinReturn,
   };
 }

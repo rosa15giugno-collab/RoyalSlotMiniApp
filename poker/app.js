@@ -158,6 +158,14 @@ const dom = {
   fsCount: document.getElementById('fsCount'),
   fsScatterImg: document.getElementById('fsScatterImg'),
   fsPips: document.getElementById('fsPips'),
+  fsSummaryOverlay: document.getElementById('fsSummaryOverlay'),
+  fsSummaryAmount: document.getElementById('fsSummaryAmount'),
+  dailyBadge: document.getElementById('dailyBadge'),
+  dailyOverlay: document.getElementById('dailyOverlay'),
+  dailyOverlayMult: document.getElementById('dailyOverlayMult'),
+  dailyBaseWin: document.getElementById('dailyBaseWin'),
+  dailyFinalWin: document.getElementById('dailyFinalWin'),
+  dailyRemaining: document.getElementById('dailyRemaining'),
   mxOverlay: document.getElementById('mysteryOverlay'),
   mxCount: document.getElementById('mxCount'),
   mxPips: document.getElementById('mxPips'),
@@ -368,7 +376,9 @@ function armAudioUnlock() {
 function featureOverlayOpen() {
   return Boolean(
     (dom.mxOverlay && !dom.mxOverlay.hidden)
-    || (dom.fsOverlay && !dom.fsOverlay.hidden),
+    || (dom.fsOverlay && !dom.fsOverlay.hidden)
+    || (dom.fsSummaryOverlay && !dom.fsSummaryOverlay.hidden)
+    || (dom.dailyOverlay && !dom.dailyOverlay.hidden),
   );
 }
 
@@ -755,6 +765,92 @@ function showFreeSpinOverlay(scatterCount, awarded, { persist = false } = {}) {
   });
 }
 
+function freeSpinFeatureTotal(spins) {
+  if (!Array.isArray(spins)) return 0;
+  return spins.reduce((sum, fs) => {
+    const n = Number(fs?.base_win);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
+}
+
+function showFreeSpinSummary(total) {
+  const overlay = dom.fsSummaryOverlay;
+  if (!overlay) return Promise.resolve();
+  const raw = Number(total);
+  const chips = Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : 0;
+  if (dom.fsSummaryAmount) {
+    dom.fsSummaryAmount.textContent = formatChips(chips);
+  }
+  overlay.classList.remove('is-open');
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  void overlay.offsetWidth;
+  overlay.classList.add('is-open');
+  publishFlow();
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      overlay.classList.remove('is-open');
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+      publishFlow();
+      resolve();
+    }, FS_OVERLAY_MS);
+  });
+}
+
+function formatDailyMultiplier(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 1) return '';
+  const shown = Number.isInteger(n) ? String(n) : String(n).replace(/\.0+$/, '');
+  return `x${shown}`;
+}
+
+function applyDailyBadge(payload) {
+  const badge = dom.dailyBadge;
+  if (!badge) return;
+  const active = Boolean(payload?.daily_bonus_active);
+  const remaining = Number(payload?.daily_wins_remaining);
+  const label = formatDailyMultiplier(payload?.daily_bonus_multiplier);
+  if (!active || !label || !(remaining > 0)) {
+    badge.hidden = true;
+    badge.textContent = '';
+    return;
+  }
+  badge.hidden = false;
+  badge.textContent = `${label} • ${Math.trunc(remaining)} rimaste`;
+}
+
+function showDailyBonusOverlay(round) {
+  const overlay = dom.dailyOverlay;
+  if (!overlay || !round?.daily_applied) return Promise.resolve();
+  const mult = formatDailyMultiplier(round.daily_multiplier);
+  if (!mult) return Promise.resolve();
+  const base = Number(round.after_level ?? round.base_win ?? 0);
+  const finalWin = Number(round.final_win ?? round.win_amount ?? 0);
+  const remaining = Math.max(0, Math.trunc(Number(round.daily_wins_remaining) || 0));
+  if (dom.dailyOverlayMult) dom.dailyOverlayMult.textContent = mult;
+  if (dom.dailyBaseWin) dom.dailyBaseWin.textContent = formatChips(Number.isFinite(base) ? base : 0);
+  if (dom.dailyFinalWin) dom.dailyFinalWin.textContent = formatChips(Number.isFinite(finalWin) ? finalWin : 0);
+  if (dom.dailyRemaining) {
+    dom.dailyRemaining.textContent = `${remaining} VINCITE BONUS RIMASTE`;
+  }
+  overlay.classList.remove('is-open');
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  void overlay.offsetWidth;
+  overlay.classList.add('is-open');
+  publishFlow();
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      overlay.classList.remove('is-open');
+      overlay.hidden = true;
+      overlay.setAttribute('aria-hidden', 'true');
+      publishFlow();
+      resolve();
+    }, FS_OVERLAY_MS);
+  });
+}
+
 function mysteryCountLabel(bonusCount) {
   if (bonusCount >= 5) return '5+ BONUS';
   return `${bonusCount} BONUS`;
@@ -845,7 +941,7 @@ function waitForMysteryCardPick() {
   });
 }
 
-async function revealMysteryCard(card, chips) {
+async function revealMysteryCard(card, chips, { credit = true } = {}) {
   if (!card || !(chips > 0)) return;
   const facePrize = card.querySelector('.mx-card__prize');
   const prizeText = formatChips(chips);
@@ -861,7 +957,7 @@ async function revealMysteryCard(card, chips) {
   if (dom.mxOverlay) dom.mxOverlay.classList.add('is-reveal');
   spawnMysteryBurst();
   pokerAudio.playMysteryWin();
-  if (!state.mysteryCredited) {
+  if (credit && !state.mysteryCredited) {
     creditAmount(chips);
     state.mysteryCredited = true;
   }
@@ -870,7 +966,7 @@ async function revealMysteryCard(card, chips) {
   telegram.haptic?.('medium');
 }
 
-async function showMysteryOverlay(bonusCount, chips) {
+async function showMysteryOverlay(bonusCount, chips, { credit = true } = {}) {
   if (!dom.mxOverlay || !(chips > 0)) return;
   setMysteryPips(bonusCount);
   if (dom.mxCount) dom.mxCount.textContent = mysteryCountLabel(bonusCount);
@@ -889,7 +985,7 @@ async function showMysteryOverlay(bonusCount, chips) {
   pokerAudio.startMysteryBed();
   const chosen = await waitForMysteryCardPick();
   if (chosen) {
-    await revealMysteryCard(chosen, chips);
+    await revealMysteryCard(chosen, chips, { credit });
     await wait(MX_REVEAL_MS);
   }
   clearBonusHighlights();
@@ -1375,23 +1471,59 @@ function settlementFromServerPaid(round, evalResult) {
 
 async function runServerFreeSpins(spins) {
   state.inFreeSpins = true;
-  state.freeSpinsLeft = spins.length;
+  const first = Array.isArray(spins) && spins[0] ? spins[0] : null;
+  state.freeSpinsLeft = Number.isFinite(Number(first?.remaining_before))
+    ? Number(first.remaining_before)
+    : spins.length;
   updateFsRemain();
   let fsCredit = 0;
   try {
     for (const fs of spins) {
       await wait(FS_GAP_MS);
+      if (Number.isFinite(Number(fs.remaining_before))) {
+        state.freeSpinsLeft = Number(fs.remaining_before);
+        updateFsRemain();
+      }
       const names = namesFromServerGrid(fs.grid);
       const evalResult = evalFromServerSpin(fs);
+      const mystery = fs.mystery;
+      const mysteryTriggered = Boolean(mystery?.triggered) && (mystery?.reward_chips || 0) > 0;
+      const mysteryCredit = mysteryTriggered ? Number(mystery.reward_chips) : 0;
+      const lineScatter = Number.isFinite(Number(fs.line_scatter_win))
+        ? Number(fs.line_scatter_win)
+        : Math.max(0, Number(fs.base_win || 0) - mysteryCredit);
       const settlement = {
         evalResult,
-        lineScatterCredit: fs.base_win || 0,
-        mysteryCredit: 0,
-        mystery: null,
+        lineScatterCredit: lineScatter,
+        mysteryCredit,
+        mystery: mysteryTriggered
+          ? {
+              triggered: true,
+              tier: mystery.tier,
+              x: mystery.x,
+              bonusReturn: mystery.bonus_return,
+              chips: mysteryCredit,
+            }
+          : null,
       };
       const result = await playReelSpin(names, settlement);
-      fsCredit += result?.settlement?.lineScatterCredit || 0;
-      state.freeSpinsLeft -= 1;
+      fsCredit += Number(fs.base_win) || result?.settlement?.lineScatterCredit || 0;
+      if (mysteryTriggered) {
+        await showMysteryOverlay(
+          Number(mystery.bonus_count || evalResult.bonus.count),
+          mysteryCredit,
+          { credit: false },
+        );
+      }
+      if (Number(fs.retrigger_awarded) > 0 && Number.isFinite(Number(fs.remaining_before))) {
+        state.freeSpinsLeft = Number(fs.remaining_before) + Number(fs.retrigger_awarded);
+        updateFsRemain();
+      }
+      if (Number.isFinite(Number(fs.remaining_after))) {
+        state.freeSpinsLeft = Number(fs.remaining_after);
+      } else {
+        state.freeSpinsLeft = Math.max(0, state.freeSpinsLeft - 1);
+      }
       updateFsRemain();
     }
   } finally {
@@ -1401,6 +1533,7 @@ async function runServerFreeSpins(spins) {
     updateFsRemain();
     await pokerAudio.stopFreeSpinLoop({ fadeSec: 0.4 });
     pokerAudio.playFreeSpinEnd(fsCredit > 0);
+    await showFreeSpinSummary(freeSpinFeatureTotal(spins));
   }
 }
 
@@ -1428,7 +1561,9 @@ async function presentServerRound(round, { applyBalance = true, skipPaidVisual =
     await playReelSpin(names, settlement);
   }
   if (settlement.mystery?.triggered && settlement.mysteryCredit > 0) {
-    await showMysteryOverlay(evalResult.bonus.count, settlement.mysteryCredit);
+    await showMysteryOverlay(evalResult.bonus.count, settlement.mysteryCredit, {
+      credit: false,
+    });
     state.mysteryCredited = true;
   }
   const awarded = round.free_spins_awarded || round.free_spins?.length || 0;
@@ -1441,6 +1576,10 @@ async function presentServerRound(round, { applyBalance = true, skipPaidVisual =
   } else if (settlement.mystery?.triggered) {
     await playWinHighlight(evalResult, settlement.lineScatterCredit);
   }
+  if (round.daily_applied && !round.replayed) {
+    await showDailyBonusOverlay(round);
+  }
+  applyDailyBadge(round);
   if (
     applyBalance
     && typeof round.balance_after === 'number'
@@ -1650,6 +1789,7 @@ async function loadBalance() {
     if (typeof data?.balance === 'number' && Number.isFinite(data.balance) && data.balance >= 0) {
       state.balance = toWalletChips(data.balance);
     }
+    applyDailyBadge(data);
   } catch (error) {
     console.info('[PokerSlot] saldo demo, fetchBalance non disponibile.', error);
   }
