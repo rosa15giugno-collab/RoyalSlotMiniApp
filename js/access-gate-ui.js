@@ -1,8 +1,8 @@
 /**
  * Mini App access gate — AUTHENTICATING / ACCESSO RISERVATO screens.
  */
-import { AccessState } from './miniapp-access.js';
-import { CONFIG } from './config.js';
+import { AccessState } from './miniapp-access.js?v=2';
+import { CONFIG } from './config.js?v=2';
 
 const GATE_ID = 'miniappAccessGate';
 
@@ -85,16 +85,23 @@ export async function runAccessGate(telegram, appId, rootSelector) {
   setGameVisible(rootSelector, false);
   showAccessGate(AccessState.AUTHENTICATING);
 
-  const { establishMiniappAccess } = await import('./miniapp-access.js');
-  const state = await establishMiniappAccess(telegram, appId);
+  try {
+    const { establishMiniappAccess } = await import('./miniapp-access.js?v=2');
+    const state = await establishMiniappAccess(telegram, appId);
 
-  if (state === AccessState.AUTHORIZED) {
-    hideAccessGate();
-    setGameVisible(rootSelector, true);
-    return true;
+    if (state === AccessState.AUTHORIZED) {
+      hideAccessGate();
+      setGameVisible(rootSelector, true);
+      return true;
+    }
+
+    showAccessGate(AccessState.DENIED);
+    setGameVisible(rootSelector, false);
+    return false;
+  } catch (error) {
+    console.error('[MINIAPP FRONTEND] access gate error', error?.name || error);
+    showAccessGate(AccessState.DENIED);
+    setGameVisible(rootSelector, false);
+    return false;
   }
-
-  showAccessGate(AccessState.DENIED);
-  setGameVisible(rootSelector, false);
-  return false;
 }

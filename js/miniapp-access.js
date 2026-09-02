@@ -1,7 +1,7 @@
 /**
  * Mini App access gate — server-side session exchange.
  */
-import { CONFIG } from './config.js';
+import { CONFIG } from './config.js?v=2';
 
 export const AccessState = {
   AUTHENTICATING: 'authenticating',
@@ -30,9 +30,19 @@ export function allowsLocalDemo() {
   return isLocalDevHost() && !isProductionBackend();
 }
 
+const ACCESS_EXCHANGE_TIMEOUT_MS = 10000;
+
+function logFrontendStep(step, detail = '') {
+  const suffix = detail ? ` ${detail}` : '';
+  console.info(`[MINIAPP FRONTEND] ${step}${suffix}`);
+}
+
 export async function establishMiniappAccess(telegram, appId) {
-  const initData = telegram.getInitData?.() ?? '';
   const hasSdk = Boolean(window.Telegram?.WebApp);
+  logFrontendStep(1, hasSdk ? 'init telegram ok' : 'init telegram missing');
+
+  const initData = telegram.getInitData?.() ?? '';
+  logFrontendStep(2, initData ? 'initData present' : 'initData missing');
 
   if (!hasSdk || !initData) {
     return allowsLocalDemo() ? AccessState.AUTHORIZED : AccessState.DENIED;
@@ -42,28 +52,55 @@ export async function establishMiniappAccess(telegram, appId) {
     return allowsLocalDemo() ? AccessState.AUTHORIZED : AccessState.DENIED;
   }
 
-  const response = await fetch(`${CONFIG.api.baseUrl}${CONFIG.api.endpoints.accessSession}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Telegram-Init-Data': initData,
-      'X-Miniapp-App': appId,
-    },
-  });
+  const url = `${CONFIG.api.baseUrl}${CONFIG.api.endpoints.accessSession}`;
+  logFrontendStep(3, `start access exchange app=${appId}`);
 
-  if (response.status === 403) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ACCESS_EXCHANGE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': initData,
+        'X-Miniapp-App': appId,
+      },
+      signal: controller.signal,
+    });
+
+    logFrontendStep(4, `response status=${response.status}`);
+
+    if (response.status === 403) {
+      sessionToken = null;
+      return AccessState.DENIED;
+    }
+
+    if (!response.ok) {
+      sessionToken = null;
+      return AccessState.DENIED;
+    }
+
+    const data = await response.json();
+    logFrontendStep(5, 'response parsed');
+
+    sessionToken = data.session_token || null;
+    logFrontendStep(6, sessionToken ? 'session token received' : 'session token missing');
+
+    if (sessionToken) {
+      logFrontendStep(7, `access authorized via=${data.authorized_via || 'unknown'}`);
+      return AccessState.AUTHORIZED;
+    }
+
+    return AccessState.DENIED;
+  } catch (error) {
+    const reason = error?.name === 'AbortError' ? 'timeout' : 'network';
+    logFrontendStep(4, `response error=${reason}`);
     sessionToken = null;
     return AccessState.DENIED;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  if (!response.ok) {
-    sessionToken = null;
-    return AccessState.DENIED;
-  }
-
-  const data = await response.json();
-  sessionToken = data.session_token || null;
-  return sessionToken ? AccessState.AUTHORIZED : AccessState.DENIED;
 }
 
 export function miniappAuthHeaders(appId, telegram) {

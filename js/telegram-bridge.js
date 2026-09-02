@@ -1,10 +1,10 @@
-import { CONFIG } from './config.js';
+import { CONFIG } from './config.js?v=2';
 import {
   allowsLocalDemo,
   getMiniappSession,
   isProductionBackend,
   miniappAuthHeaders,
-} from './miniapp-access.js';
+} from './miniapp-access.js?v=2';
 
 /**
  * Telegram WebApp bridge — demo-safe, ready for Casino Bot integration.

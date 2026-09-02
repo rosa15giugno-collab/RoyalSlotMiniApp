@@ -6,10 +6,10 @@
  * Audio: poker/audio-manager.js. POKERSLOT_SELECTED_V1 frozen.
  */
 
-import { TelegramBridge } from '../js/telegram-bridge.js';
-import { CONFIG } from '../js/config.js';
-import { runAccessGate } from '../js/access-gate-ui.js';
-import { allowsLocalDemo } from '../js/miniapp-access.js';
+import { TelegramBridge } from '../js/telegram-bridge.js?v=2';
+import { CONFIG } from '../js/config.js?v=2';
+import { runAccessGate } from '../js/access-gate-ui.js?v=2';
+import { allowsLocalDemo } from '../js/miniapp-access.js?v=2';
 import { formatChips, formatPayoutMultiplier, shouldShowVipSecondChance, vipTierLabel } from '../js/utils.js';
 import {
   ASSETS,
@@ -1928,6 +1928,8 @@ async function init() {
 
   const allowed = await runAccessGate(telegram, POKER_APP_ID, '.stage');
   if (!allowed) return;
+
+  console.info('[MINIAPP FRONTEND] 8 boot poker started');
 
   if (dom.machineArt) {
     dom.machineArt.src = ASSETS.base;
