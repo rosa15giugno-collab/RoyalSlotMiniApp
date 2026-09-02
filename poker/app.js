@@ -8,6 +8,8 @@
 
 import { TelegramBridge } from '../js/telegram-bridge.js';
 import { CONFIG } from '../js/config.js';
+import { runAccessGate } from '../js/access-gate-ui.js';
+import { allowsLocalDemo } from '../js/miniapp-access.js';
 import { formatChips, formatPayoutMultiplier, shouldShowVipSecondChance, vipTierLabel } from '../js/utils.js';
 import {
   ASSETS,
@@ -1481,6 +1483,7 @@ function readServerFxKind() {
 }
 
 function isLocalPreviewFlow() {
+  if (!allowsLocalDemo()) return false;
   return Boolean(
     readLineTest()
     || readBonusTestCount()
@@ -1918,6 +1921,11 @@ function createAudioToggle() {
 }
 
 async function init() {
+  telegram.init();
+
+  const allowed = await runAccessGate(telegram, 'poker', '.stage');
+  if (!allowed) return;
+
   if (dom.machineArt) {
     dom.machineArt.src = ASSETS.base;
   }

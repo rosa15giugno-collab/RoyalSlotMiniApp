@@ -1,4 +1,10 @@
 import { CONFIG } from './config.js';
+import {
+  allowsLocalDemo,
+  getMiniappSession,
+  isProductionBackend,
+  miniappAuthHeaders,
+} from './miniapp-access.js';
 
 /**
  * Telegram WebApp bridge — demo-safe, ready for Casino Bot integration.
@@ -31,9 +37,19 @@ export class TelegramBridge {
   }
 
   /**
-   * Call the Casino API only with real Telegram initData.
-   * Local/demo open (no WebApp initData) must not hit production.
+   * Call the Casino API only with real Telegram initData and valid session.
    */
+  _canUseApi(appId = CONFIG.miniapp.appId) {
+    if (!CONFIG.api.baseUrl || !this._hasTelegramAuth()) return false;
+    if (isProductionBackend()) return Boolean(getMiniappSession());
+    if (allowsLocalDemo()) return true;
+    return Boolean(getMiniappSession());
+  }
+
+  _apiHeaders(appId = CONFIG.miniapp.appId) {
+    return miniappAuthHeaders(appId, this);
+  }
+
   _hasTelegramAuth() {
     return Boolean(this.getInitData());
   }
@@ -63,21 +79,22 @@ export class TelegramBridge {
   /**
    * Future: fetch profile (username, balance) from Python backend.
    */
-  async fetchProfile() {
+  async fetchProfile(appId = CONFIG.miniapp.appId) {
     const localUsername = this.getUsername();
     const base = CONFIG.api.baseUrl;
-    if (!base || !this._hasTelegramAuth()) {
-      return { username: localUsername, demo: true };
+    if (!base || !this._canUseApi(appId)) {
+      if (allowsLocalDemo() && !isProductionBackend()) {
+        return { username: localUsername, demo: true };
+      }
+      throw new Error('ACCESS_DENIED');
     }
 
     const response = await fetch(`${base}${CONFIG.api.endpoints.profile}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': this.getInitData(),
-      },
+      headers: this._apiHeaders(appId),
     });
 
+    if (response.status === 403) throw new Error('ACCESS_DENIED');
     if (!response.ok) throw new Error('Profile fetch failed');
     const data = await response.json();
     const balance = typeof data.balance === 'number' ? data.balance : data.chips;
@@ -117,20 +134,21 @@ export class TelegramBridge {
   /**
    * Future: fetch real chip balance from Python backend.
    */
-  async fetchBalance() {
+  async fetchBalance(appId = CONFIG.miniapp.appId) {
     const base = CONFIG.api.baseUrl;
-    if (!base || !this._hasTelegramAuth()) {
-      return { balance: CONFIG.demo.initialBalance, demo: true };
+    if (!base || !this._canUseApi(appId)) {
+      if (allowsLocalDemo() && !isProductionBackend()) {
+        return { balance: CONFIG.demo.initialBalance, demo: true };
+      }
+      throw new Error('ACCESS_DENIED');
     }
 
     const response = await fetch(`${base}${CONFIG.api.endpoints.balance}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': this.getInitData(),
-      },
+      headers: this._apiHeaders(appId),
     });
 
+    if (response.status === 403) throw new Error('ACCESS_DENIED');
     if (!response.ok) throw new Error('Balance fetch failed');
     const data = await response.json();
     return {
@@ -148,20 +166,23 @@ export class TelegramBridge {
    * Server-authoritative spin. Same reference_id is reused for HTTP retries
    * of this request only — a new SPIN click must generate a new UUID.
    */
-  async requestSpin(bet, referenceId) {
+  async requestSpin(bet, referenceId, appId = CONFIG.miniapp.appId) {
     const base = CONFIG.api.baseUrl;
-    if (!base || !this._hasTelegramAuth()) return null;
+    if (!base || !this._canUseApi(appId)) return null;
 
     const response = await fetch(`${base}${CONFIG.api.endpoints.spin}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': this.getInitData(),
-      },
+      headers: this._apiHeaders(appId),
       body: JSON.stringify({ bet, reference_id: referenceId }),
     });
 
     const data = await response.json().catch(() => ({}));
+
+    if (response.status === 403) {
+      const err = new Error('ACCESS_DENIED');
+      err.code = 'access_denied';
+      throw err;
+    }
 
     if (response.status === 400) {
       const detail = data.detail;
@@ -205,20 +226,23 @@ export class TelegramBridge {
    * PokerSlot server-authoritative round. Full payload — the client animates
    * it and must not re-roll Mystery, Free Spins, or wallet math.
    */
-  async requestPokerSpin(bet, referenceId) {
+  async requestPokerSpin(bet, referenceId, appId = 'poker') {
     const base = CONFIG.api.baseUrl;
-    if (!base || !this._hasTelegramAuth()) return null;
+    if (!base || !this._canUseApi(appId)) return null;
 
     const response = await fetch(`${base}${CONFIG.api.endpoints.pokerSpin}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': this.getInitData(),
-      },
+      headers: this._apiHeaders(appId),
       body: JSON.stringify({ bet, reference_id: referenceId }),
     });
 
     const data = await response.json().catch(() => ({}));
+
+    if (response.status === 403) {
+      const err = new Error('ACCESS_DENIED');
+      err.code = 'access_denied';
+      throw err;
+    }
 
     if (response.status === 400) {
       const detail = data.detail;

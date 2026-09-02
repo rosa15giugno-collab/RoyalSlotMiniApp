@@ -4,6 +4,7 @@
 
 import { CONFIG } from './js/config.js';
 import { TelegramBridge } from './js/telegram-bridge.js';
+import { runAccessGate } from './js/access-gate-ui.js';
 import { SlotEngine } from './js/slot-engine.js';
 import { ReelAnimator } from './js/reel-animator.js';
 import {
@@ -756,6 +757,9 @@ function bindEvents() {
 
 async function init() {
   telegram.init();
+
+  const allowed = await runAccessGate(telegram, CONFIG.miniapp.appId, '#app');
+  if (!allowed) return;
 
   const resolved = telegram.resolveUsername();
   state.username = resolved.username;

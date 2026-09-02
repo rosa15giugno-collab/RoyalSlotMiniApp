@@ -12,7 +12,14 @@ export const CONFIG = {
       spin: '/api/slot/spin',
       pokerSpin: '/api/poker/spin',
       profile: '/api/user/profile',
+      accessSession: '/api/miniapp/access/session',
     },
+  },
+
+  miniapp: {
+    appId: 'royale',
+    ownerContactUrl: 'https://t.me/Rosa_ag_007',
+    ownerContactLabel: '@Rosa_ag_007',
   },
 
   demo: {
