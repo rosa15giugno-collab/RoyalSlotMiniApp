@@ -6,10 +6,8 @@
  * Audio: poker/audio-manager.js. POKERSLOT_SELECTED_V1 frozen.
  */
 
-import { TelegramBridge } from '../js/telegram-bridge.js?v=2';
-import { CONFIG } from '../js/config.js?v=2';
-import { runAccessGate } from '../js/access-gate-ui.js?v=2';
-import { allowsLocalDemo } from '../js/miniapp-access.js?v=2';
+import { TelegramBridge } from '../js/telegram-bridge.js';
+import { CONFIG } from '../js/config.js';
 import { formatChips, formatPayoutMultiplier, shouldShowVipSecondChance, vipTierLabel } from '../js/utils.js';
 import {
   ASSETS,
@@ -64,9 +62,6 @@ import {
   expectedAudioSeq,
   parseServerFxKind,
 } from './server-fx-fixtures.js?v=1';
-
-/** Mini App access — PokerSlot session is always bound to app_id poker. */
-const POKER_APP_ID = 'poker';
 
 const telegram = new TelegramBridge();
 
@@ -1486,7 +1481,6 @@ function readServerFxKind() {
 }
 
 function isLocalPreviewFlow() {
-  if (!allowsLocalDemo()) return false;
   return Boolean(
     readLineTest()
     || readBonusTestCount()
@@ -1735,7 +1729,7 @@ async function serverSpin() {
     if (error?.code === 'insufficient_balance' || error?.message === 'INSUFFICIENT_BALANCE') {
       showInsufficientBalanceNotice();
       try {
-        const data = await telegram.fetchBalance(POKER_APP_ID);
+        const data = await telegram.fetchBalance();
         if (typeof data?.balance === 'number') {
           state.balance = toWalletChips(data.balance);
           updateBalanceUi();
@@ -1885,7 +1879,7 @@ async function buildControls() {
 
 async function loadBalance() {
   try {
-    const data = await telegram.fetchBalance(POKER_APP_ID);
+    const data = await telegram.fetchBalance();
     if (typeof data?.balance === 'number' && Number.isFinite(data.balance) && data.balance >= 0) {
       state.balance = toWalletChips(data.balance);
     }
@@ -1924,13 +1918,6 @@ function createAudioToggle() {
 }
 
 async function init() {
-  telegram.init();
-
-  const allowed = await runAccessGate(telegram, POKER_APP_ID, '.stage');
-  if (!allowed) return;
-
-  console.info('[MINIAPP FRONTEND] 8 boot poker started');
-
   if (dom.machineArt) {
     dom.machineArt.src = ASSETS.base;
   }
