@@ -864,10 +864,15 @@ function showVipSecondChanceOverlay(round) {
   if (dom.vipOverlayTitle) {
     dom.vipOverlayTitle.textContent = 'SECONDA CHANCE!';
   }
+  overlay.classList.remove('is-open');
   overlay.hidden = false;
   overlay.setAttribute('aria-hidden', 'false');
+  void overlay.offsetWidth;
+  overlay.classList.add('is-open');
+  publishFlow();
   return new Promise((resolve) => {
     window.setTimeout(() => {
+      overlay.classList.remove('is-open');
       overlay.hidden = true;
       overlay.setAttribute('aria-hidden', 'true');
       resolve();
