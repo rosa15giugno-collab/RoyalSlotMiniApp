@@ -12,6 +12,10 @@ export const CONFIG = {
       spin: '/api/slot/spin',
       pokerSpin: '/api/poker/spin',
       profile: '/api/user/profile',
+      blackjackStart: '/api/blackjack/start',
+      blackjackHit: '/api/blackjack/hit',
+      blackjackStand: '/api/blackjack/stand',
+      blackjackCurrent: '/api/blackjack/current',
     },
   },
 

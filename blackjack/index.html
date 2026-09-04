@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1a12">
+  <title>Blackjack — CASINÒ by Rosa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="felt" id="app">
+    <header class="brand">
+      <p class="brand__kicker">CASINÒ by Rosa</p>
+      <h1 class="brand__title">BLACKJACK</h1>
+    </header>
+
+    <section class="seat seat--dealer" aria-label="Banco">
+      <p class="seat__label">BANCO</p>
+      <div class="hand" id="dealerHand"></div>
+      <p class="seat__score" id="dealerScore">—</p>
+    </section>
+
+    <div class="rail" aria-hidden="true"></div>
+
+    <section class="seat seat--player" aria-label="Giocatore">
+      <div class="hand" id="playerHand"></div>
+      <p class="seat__label">GIOCATORE</p>
+      <p class="seat__score" id="playerScore">—</p>
+      <p class="outcome" id="outcome" aria-live="polite"></p>
+    </section>
+
+    <footer class="dock">
+      <div class="dock__row">
+        <div>
+          <span class="dock__hint">SALDO</span>
+          <strong id="balanceValue">—</strong>
+        </div>
+        <div>
+          <span class="dock__hint">PUNTATA</span>
+          <strong id="betValue">100</strong>
+        </div>
+      </div>
+      <div class="bets" id="betPresets" role="group" aria-label="Puntate"></div>
+      <button type="button" class="btn btn--gold" id="dealBtn">DISTRIBUISCI</button>
+      <div class="actions" id="playActions" hidden>
+        <button type="button" class="btn" id="hitBtn">CARTA</button>
+        <button type="button" class="btn btn--gold" id="standBtn">STO</button>
+      </div>
+      <p class="error" id="errorBox" hidden></p>
+    </footer>
+  </div>
+  <script type="module" src="app.js?v=1"></script>
+</body>
+</html>
