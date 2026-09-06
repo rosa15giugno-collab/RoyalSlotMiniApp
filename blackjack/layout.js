@@ -21,4 +21,5 @@ export const ERROR_COPY = {
   NETWORK_ERROR: 'Errore di rete. Riprova.',
   CONNECTION_INTERRUPTED: 'Connessione interrotta. Verifico la mano…',
   USER_NOT_FOUND: 'Utente non trovato',
+  AUTH_ERROR: 'Apri Blackjack direttamente da Telegram per giocare.',
 };

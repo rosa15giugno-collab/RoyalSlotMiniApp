@@ -1,6 +1,13 @@
 import { CONFIG } from '../js/config.js';
 import { TelegramBridge } from '../js/telegram-bridge.js';
 import { formatChips } from '../js/utils.js';
+import {
+  balanceLabel,
+  controlsDisabled,
+  errorCodeFromHttp,
+  hasInitData,
+  isRecoverableNetworkError,
+} from './auth-state.js';
 import { BETS, DEFAULT_BET, ERROR_COPY, RED_SUITS, SUIT_SYMBOL } from './layout.js';
 
 const telegram = new TelegramBridge();
@@ -18,6 +25,7 @@ const state = {
   balance: null,
   roundId: null,
   payload: null,
+  authenticated: false,
   /** @type {{ kind: 'start'|'hit'|'stand', actionId: string, bet?: number, roundId?: string } | null} */
   pending: null,
 };
@@ -67,14 +75,17 @@ function clearError() {
 
 function setBusy(isBusy) {
   const playing = state.ui === 'playing' || state.ui === 'action_pending' || state.ui === 'recovering';
-  const canBet = state.ui === 'idle' || state.ui === 'settled' || state.ui === 'error';
-  dom.dealBtn.disabled = isBusy || playing;
-  dom.hitBtn.disabled = isBusy || !playing;
-  dom.standBtn.disabled = isBusy || !playing;
-  dom.betPresets.querySelectorAll('button').forEach((btn) => {
-    btn.disabled = isBusy || playing;
+  const flags = controlsDisabled({
+    authenticated: state.authenticated,
+    busy: isBusy,
+    playing,
   });
-  void canBet;
+  dom.dealBtn.disabled = flags.deal;
+  dom.hitBtn.disabled = flags.hit;
+  dom.standBtn.disabled = flags.stand;
+  dom.betPresets.querySelectorAll('button').forEach((btn) => {
+    btn.disabled = flags.bets;
+  });
 }
 
 function cardEl(card) {
@@ -99,7 +110,10 @@ function paintHand(node, cards) {
 function paint() {
   const payload = state.payload;
   dom.betValue.textContent = String(state.bet);
-  dom.balance.textContent = state.balance == null ? '—' : formatChips(state.balance);
+  const rawBalance = balanceLabel(state.balance, state.authenticated);
+  dom.balance.textContent = rawBalance != null
+    ? rawBalance
+    : formatChips(state.balance);
   paintHand(dom.dealerHand, payload?.dealer_cards);
   paintHand(dom.playerHand, payload?.player_cards);
   if (!payload) {
@@ -139,16 +153,6 @@ function applyPayload(payload) {
   paint();
 }
 
-function errorCodeFromResponse(data, fallback) {
-  const detail = data?.detail;
-  if (typeof detail === 'string' && ERROR_COPY[detail]) return detail;
-  return fallback;
-}
-
-function isNetworkError(error) {
-  return !error?.code || error.code === 'NETWORK_ERROR' || error.code === 'CONNECTION_INTERRUPTED';
-}
-
 async function api(path, body, method = 'POST') {
   const url = `${CONFIG.api.baseUrl}${path}`;
   const controller = new AbortController();
@@ -163,6 +167,9 @@ async function api(path, body, method = 'POST') {
       options.body = JSON.stringify(body);
     }
     const response = await fetch(url, options);
+    if (path === CONFIG.api.endpoints.blackjackStart) {
+      console.info(`[BLACKJACK API] start status=${response.status}`);
+    }
     let data = null;
     try {
       data = await response.json();
@@ -170,13 +177,23 @@ async function api(path, body, method = 'POST') {
       data = null;
     }
     if (!response.ok) {
-      const err = new Error(errorCodeFromResponse(data, 'NETWORK_ERROR'));
-      err.code = errorCodeFromResponse(data, 'NETWORK_ERROR');
+      const detailRaw = data?.detail;
+      const detailStr = typeof detailRaw === 'string' ? detailRaw : null;
+      const code = errorCodeFromHttp(response.status, detailStr, ERROR_COPY);
+      const mapped = detailStr && ERROR_COPY[detailStr] && response.status !== 401 && response.status !== 403
+        ? detailStr
+        : code;
+      const err = new Error(mapped);
+      err.code = mapped;
+      err.httpStatus = response.status;
       throw err;
     }
     return data;
   } catch (error) {
+    if (error.code === 'AUTH_ERROR') throw error;
     if (error.code && error.code !== 'NETWORK_ERROR') throw error;
+    if (error.httpStatus === 401 || error.httpStatus === 403) throw error;
+    if (error.httpStatus && error.code) throw error;
     const err = new Error('NETWORK_ERROR');
     err.code = 'NETWORK_ERROR';
     throw err;
@@ -225,6 +242,7 @@ async function fetchCurrentRound() {
  * On network/timeout: keep pending action_id, show verify message,
  * retry SAME action_id first; then GET /current to realign player_turn.
  * Never auto-HIT with a new action_id.
+ * AUTH_ERROR must never enter this path.
  */
 async function recoverAfterNetwork() {
   const pending = state.pending;
@@ -240,7 +258,7 @@ async function recoverAfterNetwork() {
     clearError();
     return true;
   } catch (error) {
-    if (!isNetworkError(error)) {
+    if (!isRecoverableNetworkError(error)) {
       clearPending();
       state.ui = state.roundId ? 'playing' : 'error';
       setError(error.code || 'NETWORK_ERROR');
@@ -268,7 +286,7 @@ async function recoverAfterNetwork() {
         clearError();
         return true;
       } catch (error) {
-        if (!isNetworkError(error)) {
+        if (!isRecoverableNetworkError(error)) {
           clearPending();
           state.ui = 'error';
           setError(error.code || 'NETWORK_ERROR');
@@ -289,8 +307,19 @@ async function recoverAfterNetwork() {
 }
 
 async function refreshBalance() {
+  if (!state.authenticated) {
+    state.balance = null;
+    paint();
+    return;
+  }
   try {
     const data = await telegram.fetchBalance();
+    if (data?.demo) {
+      // Never present demo chips as a real wallet in Blackjack.
+      state.balance = null;
+      paint();
+      return;
+    }
     if (typeof data?.balance === 'number') {
       state.balance = data.balance;
       paint();
@@ -301,6 +330,7 @@ async function refreshBalance() {
 }
 
 async function resumeRound() {
+  if (!state.authenticated) return;
   try {
     const current = await fetchCurrentRound();
     if (current?.has_active_round && current.round) {
@@ -312,6 +342,11 @@ async function resumeRound() {
 }
 
 async function deal() {
+  if (!state.authenticated) {
+    setError('AUTH_ERROR');
+    paint();
+    return;
+  }
   if (state.pending && state.pending.kind !== 'start') return;
   clearError();
   const pending = ensurePending('start', { bet: state.bet });
@@ -322,7 +357,7 @@ async function deal() {
     clearPending();
     applyPayload(payload);
   } catch (error) {
-    if (isNetworkError(error)) {
+    if (isRecoverableNetworkError(error)) {
       await recoverAfterNetwork();
       await refreshBalance();
       return;
@@ -336,6 +371,11 @@ async function deal() {
 }
 
 async function play(kind) {
+  if (!state.authenticated) {
+    setError('AUTH_ERROR');
+    paint();
+    return;
+  }
   if (state.pending && state.pending.kind !== kind) return;
   if (!state.roundId && !(state.pending && state.pending.kind === kind)) return;
   clearError();
@@ -347,7 +387,7 @@ async function play(kind) {
     clearPending();
     applyPayload(payload);
   } catch (error) {
-    if (isNetworkError(error)) {
+    if (isRecoverableNetworkError(error)) {
       await recoverAfterNetwork();
       return;
     }
@@ -366,6 +406,7 @@ function buildBets() {
     btn.dataset.bet = String(amount);
     btn.textContent = String(amount);
     btn.addEventListener('click', () => {
+      if (!state.authenticated) return;
       if (busy() || state.ui === 'playing' || state.ui === 'action_pending') return;
       state.bet = amount;
       dom.betPresets.querySelectorAll('.bet-chip').forEach((el) => {
@@ -380,19 +421,42 @@ function buildBets() {
 
 async function init() {
   telegram.init();
+  state.authenticated = hasInitData(telegram.getInitData());
+  console.info(`[BLACKJACK AUTH] initData_present=${state.authenticated}`);
   buildBets();
   dom.dealBtn.addEventListener('click', () => {
+    if (!state.authenticated) {
+      setError('AUTH_ERROR');
+      paint();
+      return;
+    }
     if (busy()) return;
     void deal();
   });
   dom.hitBtn.addEventListener('click', () => {
+    if (!state.authenticated) {
+      setError('AUTH_ERROR');
+      paint();
+      return;
+    }
     if (busy()) return;
     void play('hit');
   });
   dom.standBtn.addEventListener('click', () => {
+    if (!state.authenticated) {
+      setError('AUTH_ERROR');
+      paint();
+      return;
+    }
     if (busy()) return;
     void play('stand');
   });
+  if (!state.authenticated) {
+    state.balance = null;
+    setError('AUTH_ERROR');
+    paint();
+    return;
+  }
   paint();
   await refreshBalance();
   await resumeRound();

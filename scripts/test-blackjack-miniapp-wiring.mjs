@@ -138,10 +138,17 @@ record('balance refresh corretto', () => {
 });
 
 record('error states presenti', () => {
-  ['INSUFFICIENT_BALANCE', 'INVALID_BET', 'ROUND_NOT_FOUND', 'ROUND_ALREADY_SETTLED', 'ROUND_NOT_OWNER', 'INVALID_ACTION', 'NETWORK_ERROR'].forEach((code) => {
+  ['INSUFFICIENT_BALANCE', 'INVALID_BET', 'ROUND_NOT_FOUND', 'ROUND_ALREADY_SETTLED', 'ROUND_NOT_OWNER', 'INVALID_ACTION', 'NETWORK_ERROR', 'AUTH_ERROR'].forEach((code) => {
     assert(layout.includes(code), code);
   });
   assert(app.includes('setError'), 'setError');
+});
+
+record('senza initData non simula saldo reale', () => {
+  assert(app.includes('state.authenticated'), 'auth flag');
+  assert(app.includes('hasInitData'), 'hasInitData');
+  assert(app.includes('AUTH_ERROR'), 'auth error path');
+  assert(app.includes('data?.demo'), 'blocks demo balance');
 });
 
 const failed = results.filter((item) => !item.ok);
