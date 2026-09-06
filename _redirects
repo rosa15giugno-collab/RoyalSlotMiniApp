@@ -1,0 +1,3 @@
+# Short alias for Blackjack Mini App test URL (preserves query string).
+/bj /blackjack/ 302
+/bj/ /blackjack/ 302
