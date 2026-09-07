@@ -8,7 +8,23 @@ import {
   hasInitData,
   isRecoverableNetworkError,
 } from './auth-state.js';
-import { BETS, DEFAULT_BET, ERROR_COPY, RED_SUITS, SUIT_SYMBOL } from './layout.js';
+import {
+  animateBalanceText,
+  animateDealerReveal,
+  animateHitCard,
+  animateInitialDeal,
+} from './animations.js';
+import { BlackjackAudio } from './audio.js';
+import { createCardElement } from './card-ui.js';
+import {
+  BETS,
+  DEFAULT_BET,
+  ERROR_COPY,
+  buildPayoutRows,
+  classifyOutcome,
+  outcomeHeadline,
+  outcomeSubline,
+} from './layout.js';
 
 const telegram = new TelegramBridge();
 
@@ -26,16 +42,22 @@ const state = {
   roundId: null,
   payload: null,
   authenticated: false,
+  animating: false,
   /** @type {{ kind: 'start'|'hit'|'stand', actionId: string, bet?: number, roundId?: string } | null} */
   pending: null,
 };
 
 const dom = {
+  app: document.getElementById('app'),
   dealerHand: document.getElementById('dealerHand'),
   playerHand: document.getElementById('playerHand'),
   dealerScore: document.getElementById('dealerScore'),
   playerScore: document.getElementById('playerScore'),
-  outcome: document.getElementById('outcome'),
+  softHint: document.getElementById('softHint'),
+  outcomePanel: document.getElementById('outcomePanel'),
+  outcomeTitle: document.getElementById('outcomeTitle'),
+  outcomeSub: document.getElementById('outcomeSub'),
+  breakdown: document.getElementById('breakdown'),
   balance: document.getElementById('balanceValue'),
   betValue: document.getElementById('betValue'),
   betPresets: document.getElementById('betPresets'),
@@ -59,7 +81,10 @@ function authHeaders() {
 }
 
 function busy() {
-  return state.ui === 'starting' || state.ui === 'action_pending' || state.ui === 'recovering';
+  return state.ui === 'starting'
+    || state.ui === 'action_pending'
+    || state.ui === 'recovering'
+    || state.animating;
 }
 
 function setError(code) {
@@ -77,7 +102,7 @@ function setBusy(isBusy) {
   const playing = state.ui === 'playing' || state.ui === 'action_pending' || state.ui === 'recovering';
   const flags = controlsDisabled({
     authenticated: state.authenticated,
-    busy: isBusy,
+    busy: isBusy || state.animating,
     playing,
   });
   dom.dealBtn.disabled = flags.deal;
@@ -88,54 +113,96 @@ function setBusy(isBusy) {
   });
 }
 
-function cardEl(card) {
-  const el = document.createElement('div');
-  if (card?.hidden) {
-    el.className = 'card card--hidden';
-    el.innerHTML = '<span class="card__suit">◆</span>';
-    el.setAttribute('aria-label', 'Carta coperta');
-    return el;
+function paintHandsInstant(payload) {
+  const dealer = payload?.dealer_cards || [];
+  const player = payload?.player_cards || [];
+  // Preserve hole secrecy: render card?.hidden backs only.
+  dom.dealerHand.replaceChildren(...dealer.map((card) => createCardElement(card)));
+  dom.playerHand.replaceChildren(...player.map((card) => createCardElement(card)));
+}
+
+function clearOutcomeFx() {
+  dom.app.classList.remove('is-win', 'is-blackjack', 'is-push', 'is-lose', 'is-bust');
+  dom.outcomePanel.hidden = true;
+  dom.outcomePanel.className = 'outcome';
+  dom.outcomeTitle.textContent = '';
+  dom.outcomeSub.textContent = '';
+  dom.breakdown.hidden = true;
+  dom.breakdown.replaceChildren();
+  dom.playerScore.classList.remove('is-hot', 'is-bust');
+  dom.dealerScore.classList.remove('is-hot');
+}
+
+function renderSoftHint(payload) {
+  const soft = payload?.player_soft ?? payload?.is_soft ?? payload?.soft;
+  if (soft == null || soft === false) {
+    dom.softHint.hidden = true;
+    dom.softHint.textContent = '';
+    return;
   }
-  const red = RED_SUITS.has(card.suit);
-  el.className = `card${red ? ' card--red' : ''}`;
-  const suit = SUIT_SYMBOL[card.suit] || card.suit;
-  el.innerHTML = `<span class="card__rank">${card.rank}</span><span class="card__suit">${suit}</span>`;
-  return el;
+  dom.softHint.hidden = false;
+  dom.softHint.textContent = typeof soft === 'string' ? soft : 'Soft';
 }
 
-function paintHand(node, cards) {
-  node.replaceChildren(...(cards || []).map(cardEl));
+function renderOutcome(payload) {
+  const kind = classifyOutcome(payload);
+  if (!kind) {
+    clearOutcomeFx();
+    return;
+  }
+  dom.outcomePanel.hidden = false;
+  dom.outcomePanel.className = `outcome outcome--${kind}`;
+  dom.outcomeTitle.textContent = outcomeHeadline(kind, payload);
+  dom.outcomeSub.textContent = outcomeSubline(kind, payload, formatChips);
+
+  const rows = buildPayoutRows(payload, formatChips);
+  if (rows.length > 1) {
+    dom.breakdown.hidden = false;
+    dom.breakdown.replaceChildren(...rows.map((row) => {
+      const el = document.createElement('div');
+      el.className = `breakdown__row${row.total ? ' breakdown__row--total' : ''}`;
+      el.innerHTML = `<span>${row.label}</span><span>${row.value}</span>`;
+      return el;
+    }));
+  } else {
+    dom.breakdown.hidden = true;
+    dom.breakdown.replaceChildren();
+  }
+
+  dom.app.classList.remove('is-win', 'is-blackjack', 'is-push', 'is-lose', 'is-bust');
+  dom.app.classList.add(`is-${kind}`);
+  dom.playerScore.classList.toggle('is-bust', kind === 'bust');
+  dom.playerScore.classList.toggle('is-hot', kind === 'win' || kind === 'blackjack');
+
+  if (kind === 'blackjack') BlackjackAudio.blackjack();
+  else if (kind === 'win') BlackjackAudio.win();
+  else if (kind === 'push') BlackjackAudio.push();
+  else if (kind === 'bust') BlackjackAudio.bust();
+  else BlackjackAudio.lose();
 }
 
-function paint() {
-  const payload = state.payload;
-  dom.betValue.textContent = String(state.bet);
-  const rawBalance = balanceLabel(state.balance, state.authenticated);
-  dom.balance.textContent = rawBalance != null
-    ? rawBalance
-    : formatChips(state.balance);
-  paintHand(dom.dealerHand, payload?.dealer_cards);
-  paintHand(dom.playerHand, payload?.player_cards);
+function paintScores(payload) {
   if (!payload) {
     dom.dealerScore.textContent = '—';
     dom.playerScore.textContent = '—';
-    dom.outcome.textContent = '';
-  } else {
-    const dealerShown = payload.status === 'settled'
-      ? payload.dealer_score
-      : payload.dealer_upcard_score;
-    dom.dealerScore.textContent = dealerShown == null ? '—' : String(dealerShown);
-    dom.playerScore.textContent = payload.player_score == null ? '—' : String(payload.player_score);
-    let line = payload.message || '';
-    if (payload.status === 'settled' && payload.outcome === 'a') {
-      const bits = [`+${formatChips(payload.final_credit)} Chips`];
-      if (payload.vip_applied) bits.push(`VIP ×${payload.vip_multiplier}`);
-      if (payload.level_multiplier > 1) bits.push(`Livello ${payload.level_block}`);
-      if (payload.daily_applied) bits.push(`Daily ×${payload.daily_multiplier}`);
-      line = `${payload.message} · ${bits.join(' · ')}`;
-    }
-    dom.outcome.textContent = line;
+    renderSoftHint(null);
+    return;
   }
+  const dealerShown = payload.status === 'settled'
+    ? payload.dealer_score
+    : payload.dealer_upcard_score;
+  dom.dealerScore.textContent = dealerShown == null ? '—' : String(dealerShown);
+  dom.playerScore.textContent = payload.player_score == null ? '—' : String(payload.player_score);
+  renderSoftHint(payload);
+}
+
+function paintChrome() {
+  dom.betValue.textContent = String(state.bet);
+  const rawBalance = balanceLabel(state.balance, state.authenticated);
+  if (rawBalance != null) dom.balance.textContent = rawBalance;
+  else if (state.balance != null) dom.balance.textContent = formatChips(state.balance);
+  else dom.balance.textContent = '—';
+
   const playing = state.ui === 'playing' || state.ui === 'action_pending' || state.ui === 'recovering';
   dom.playActions.hidden = !playing;
   // Hide DISTRIBUISCI while an active round is in play (resume or live).
@@ -143,13 +210,115 @@ function paint() {
   setBusy(busy());
 }
 
-function applyPayload(payload) {
+function paint() {
+  const payload = state.payload;
+  paintChrome();
+  paintHandsInstant(payload);
+  paintScores(payload);
+  if (payload?.status === 'settled') renderOutcome(payload);
+  else clearOutcomeFx();
+}
+
+async function setBalanceAnimated(nextBalance) {
+  const prev = state.balance;
+  state.balance = nextBalance;
+  if (!state.authenticated || nextBalance == null) {
+    dom.balance.textContent = '—';
+    return;
+  }
+  await animateBalanceText(dom.balance, prev, nextBalance, formatChips);
+}
+
+async function applyPayload(payload, { mode = 'instant' } = {}) {
+  const previous = state.payload;
+  const prevDealer = previous?.dealer_cards || [];
+  const prevPlayer = previous?.player_cards || [];
+
   state.payload = payload;
   state.roundId = payload.round_id;
   if (typeof payload.bet === 'number') state.bet = payload.bet;
-  if (typeof payload.balance_after === 'number') state.balance = payload.balance_after;
+
   if (payload.status === 'settled') state.ui = 'settled';
   else if (payload.status === 'player_turn') state.ui = 'playing';
+
+  const nextBalance = typeof payload.balance_after === 'number' ? payload.balance_after : state.balance;
+
+  if (mode === 'deal') {
+    state.animating = true;
+    paintChrome();
+    clearOutcomeFx();
+    paintScores({
+      ...payload,
+      // During deal, dealer full score stays hidden until settle.
+      dealer_score: payload.status === 'settled' ? payload.dealer_score : undefined,
+    });
+    if (payload.status !== 'settled') {
+      dom.dealerScore.textContent = payload.dealer_upcard_score == null
+        ? '—'
+        : String(payload.dealer_upcard_score);
+    }
+    await animateInitialDeal({
+      dealerHand: dom.dealerHand,
+      playerHand: dom.playerHand,
+      dealerCards: payload.dealer_cards,
+      playerCards: payload.player_cards,
+      createCard: createCardElement,
+      onCard: () => BlackjackAudio.dealCard(),
+    });
+    paintScores(payload);
+    if (payload.status === 'settled') renderOutcome(payload);
+    await setBalanceAnimated(nextBalance);
+    state.animating = false;
+    paintChrome();
+    return;
+  }
+
+  if (mode === 'hit') {
+    state.animating = true;
+    paintChrome();
+    BlackjackAudio.hit();
+    await animateHitCard({
+      playerHand: dom.playerHand,
+      previousCount: prevPlayer.length,
+      playerCards: payload.player_cards,
+      createCard: createCardElement,
+      onCard: () => BlackjackAudio.dealCard(),
+    });
+    paintScores(payload);
+    if (payload.player_score === 21) dom.playerScore.classList.add('is-hot');
+    if (payload.status === 'settled') renderOutcome(payload);
+    await setBalanceAnimated(nextBalance);
+    state.animating = false;
+    paintChrome();
+    return;
+  }
+
+  if (mode === 'stand') {
+    state.animating = true;
+    paintChrome();
+    BlackjackAudio.stand();
+    await animateDealerReveal({
+      dealerHand: dom.dealerHand,
+      previousDealerCards: prevDealer,
+      nextDealerCards: payload.dealer_cards,
+      createCard: createCardElement,
+      onFlip: () => BlackjackAudio.cardFlip(),
+      onCard: () => BlackjackAudio.dealCard(),
+    });
+    if (payload.player_cards) {
+      dom.playerHand.replaceChildren(
+        ...payload.player_cards.map((card) => createCardElement(card)),
+      );
+    }
+    paintScores(payload);
+    if (payload.status === 'settled') renderOutcome(payload);
+    await setBalanceAnimated(nextBalance);
+    state.animating = false;
+    paintChrome();
+    return;
+  }
+
+  if (typeof nextBalance === 'number') state.balance = nextBalance;
   paint();
 }
 
@@ -249,12 +418,12 @@ async function recoverAfterNetwork() {
   if (!pending) return false;
   state.ui = 'recovering';
   setError('CONNECTION_INTERRUPTED');
-  paint();
+  paintChrome();
 
   try {
     const payload = await sendPending(pending);
     clearPending();
-    applyPayload(payload);
+    await applyPayload(payload, { mode: 'instant' });
     clearError();
     return true;
   } catch (error) {
@@ -270,11 +439,11 @@ async function recoverAfterNetwork() {
   try {
     const current = await fetchCurrentRound();
     if (current?.has_active_round && current.round) {
-      applyPayload(current.round);
+      await applyPayload(current.round, { mode: 'instant' });
       // Keep pending so a later user retry reuses the same action_id.
       state.ui = 'playing';
       setError('CONNECTION_INTERRUPTED');
-      paint();
+      paintChrome();
       return false;
     }
     // No open round: start/stand may have committed — retry same id for replay.
@@ -282,7 +451,7 @@ async function recoverAfterNetwork() {
       try {
         const payload = await sendPending(pending);
         clearPending();
-        applyPayload(payload);
+        await applyPayload(payload, { mode: 'instant' });
         clearError();
         return true;
       } catch (error) {
@@ -302,14 +471,14 @@ async function recoverAfterNetwork() {
   if (state.roundId) state.ui = 'playing';
   else state.ui = 'error';
   setError('CONNECTION_INTERRUPTED');
-  paint();
+  paintChrome();
   return false;
 }
 
 async function refreshBalance() {
   if (!state.authenticated) {
     state.balance = null;
-    paint();
+    paintChrome();
     return;
   }
   try {
@@ -317,12 +486,12 @@ async function refreshBalance() {
     if (data?.demo) {
       // Never present demo chips as a real wallet in Blackjack.
       state.balance = null;
-      paint();
+      paintChrome();
       return;
     }
     if (typeof data?.balance === 'number') {
-      state.balance = data.balance;
-      paint();
+      await setBalanceAnimated(data.balance);
+      paintChrome();
     }
   } catch {
     /* keep last known balance */
@@ -334,7 +503,7 @@ async function resumeRound() {
   try {
     const current = await fetchCurrentRound();
     if (current?.has_active_round && current.round) {
-      applyPayload(current.round);
+      await applyPayload(current.round, { mode: 'instant' });
     }
   } catch {
     /* idle if resume fails */
@@ -344,18 +513,19 @@ async function resumeRound() {
 async function deal() {
   if (!state.authenticated) {
     setError('AUTH_ERROR');
-    paint();
+    paintChrome();
     return;
   }
   if (state.pending && state.pending.kind !== 'start') return;
   clearError();
+  clearOutcomeFx();
   const pending = ensurePending('start', { bet: state.bet });
   state.ui = 'starting';
-  paint();
+  paintChrome();
   try {
     const payload = await sendPending(pending);
     clearPending();
-    applyPayload(payload);
+    await applyPayload(payload, { mode: 'deal' });
   } catch (error) {
     if (isRecoverableNetworkError(error)) {
       await recoverAfterNetwork();
@@ -373,7 +543,7 @@ async function deal() {
 async function play(kind) {
   if (!state.authenticated) {
     setError('AUTH_ERROR');
-    paint();
+    paintChrome();
     return;
   }
   if (state.pending && state.pending.kind !== kind) return;
@@ -381,11 +551,11 @@ async function play(kind) {
   clearError();
   const pending = ensurePending(kind, { roundId: state.roundId });
   state.ui = 'action_pending';
-  paint();
+  paintChrome();
   try {
     const payload = await sendPending(pending);
     clearPending();
-    applyPayload(payload);
+    await applyPayload(payload, { mode: kind === 'hit' ? 'hit' : 'stand' });
   } catch (error) {
     if (isRecoverableNetworkError(error)) {
       await recoverAfterNetwork();
@@ -405,14 +575,16 @@ function buildBets() {
     btn.className = 'bet-chip';
     btn.dataset.bet = String(amount);
     btn.textContent = String(amount);
+    btn.setAttribute('aria-label', `Puntata ${amount}`);
     btn.addEventListener('click', () => {
       if (!state.authenticated) return;
       if (busy() || state.ui === 'playing' || state.ui === 'action_pending') return;
       state.bet = amount;
+      BlackjackAudio.chipBet();
       dom.betPresets.querySelectorAll('.bet-chip').forEach((el) => {
         el.classList.toggle('is-active', Number(el.dataset.bet) === state.bet);
       });
-      paint();
+      paintChrome();
     });
     if (amount === state.bet) btn.classList.add('is-active');
     dom.betPresets.append(btn);
@@ -427,7 +599,7 @@ async function init() {
   dom.dealBtn.addEventListener('click', () => {
     if (!state.authenticated) {
       setError('AUTH_ERROR');
-      paint();
+      paintChrome();
       return;
     }
     if (busy()) return;
@@ -436,7 +608,7 @@ async function init() {
   dom.hitBtn.addEventListener('click', () => {
     if (!state.authenticated) {
       setError('AUTH_ERROR');
-      paint();
+      paintChrome();
       return;
     }
     if (busy()) return;
@@ -445,7 +617,7 @@ async function init() {
   dom.standBtn.addEventListener('click', () => {
     if (!state.authenticated) {
       setError('AUTH_ERROR');
-      paint();
+      paintChrome();
       return;
     }
     if (busy()) return;

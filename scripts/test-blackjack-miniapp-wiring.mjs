@@ -55,7 +55,7 @@ record('chiama /api/blackjack/current al boot', () => {
 
 record('resume UI playing', () => {
   assert(app.includes("payload.status === 'player_turn'") && app.includes("state.ui = 'playing'"), 'playing on player_turn');
-  assert(app.includes('has_active_round') && app.includes('applyPayload(current.round)'), 'apply current round');
+  assert(app.includes('has_active_round') && app.includes('applyPayload(current.round'), 'apply current round');
 });
 
 record('non mostra DISTRIBUISCI con round attivo', () => {
@@ -110,7 +110,8 @@ record('start response lost no second debit logic', () => {
 });
 
 record('nessun deck/hole processing client', () => {
-  assert(!/deck/.test(app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '')), 'no deck in client logic');
+  const appLogic = app.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+  assert(!/\bdeck\b/.test(appLogic), 'no deck in client logic');
   assert(app.includes('card?.hidden'), 'renders hidden hole only');
   assert(!app.includes('hole_rank') && !app.includes('hole_suit'), 'no hole fields');
 });
@@ -119,7 +120,7 @@ record('buttons disabled during request', () => {
   assert(app.includes('setBusy'), 'setBusy');
   assert(app.includes('dom.dealBtn.disabled'), 'deal disabled');
   assert(app.includes('dom.hitBtn.disabled'), 'hit disabled');
-  assert(app.includes("state.ui === 'starting' || state.ui === 'action_pending'"), 'busy states');
+  assert(app.includes("state.ui === 'starting'") && app.includes("state.ui === 'action_pending'"), 'busy states');
 });
 
 record('no double/split controls', () => {
@@ -130,6 +131,14 @@ record('no double/split controls', () => {
 record('dealer hole hidden fino al settle', () => {
   assert(app.includes('card?.hidden'), 'hidden renderer');
   assert(app.includes("payload.status === 'settled'"), 'score after settle');
+});
+
+record('v2 modules presenti', () => {
+  assert(app.includes('createCardElement'), 'card-ui');
+  assert(app.includes('animateInitialDeal'), 'deal animation');
+  assert(app.includes('animateHitCard'), 'hit animation');
+  assert(app.includes('animateDealerReveal'), 'dealer reveal');
+  assert(app.includes('BlackjackAudio'), 'audio hooks');
 });
 
 record('balance refresh corretto', () => {

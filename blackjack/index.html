@@ -3,56 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1a12">
+  <meta name="theme-color" content="#06140e">
   <title>Blackjack — CASINÒ by Rosa</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=5">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="felt" id="app">
+    <div class="felt__glow" aria-hidden="true"></div>
+    <div class="felt__vignette" aria-hidden="true"></div>
+    <div class="felt__rail" aria-hidden="true"></div>
+
     <header class="brand">
-      <p class="brand__kicker">CASINÒ by Rosa</p>
+      <img
+        class="brand__logo"
+        src="../assets/brand/casino-by-rosa-logo.png?v=3"
+        alt="CASINÒ by Rosa"
+        width="640"
+        height="426"
+        decoding="async"
+      >
       <h1 class="brand__title">BLACKJACK</h1>
     </header>
 
-    <section class="seat seat--dealer" aria-label="Banco">
-      <p class="seat__label">BANCO</p>
-      <div class="hand" id="dealerHand"></div>
-      <p class="seat__score" id="dealerScore">—</p>
-    </section>
+    <main class="table" aria-label="Tavolo Blackjack">
+      <section class="zone zone--dealer" aria-label="Banco">
+        <div class="zone__meta">
+          <p class="zone__label">BANCO</p>
+          <p class="zone__score" id="dealerScore">—</p>
+        </div>
+        <div class="hand hand--dealer" id="dealerHand"></div>
+      </section>
 
-    <div class="rail" aria-hidden="true"></div>
+      <div class="table__arc" aria-hidden="true">
+        <span class="table__arc-line"></span>
+        <span class="table__arc-mark">21</span>
+      </div>
 
-    <section class="seat seat--player" aria-label="Giocatore">
-      <div class="hand" id="playerHand"></div>
-      <p class="seat__label">GIOCATORE</p>
-      <p class="seat__score" id="playerScore">—</p>
-      <p class="outcome" id="outcome" aria-live="polite"></p>
-    </section>
+      <section class="zone zone--player" aria-label="Giocatore">
+        <div class="hand hand--player" id="playerHand"></div>
+        <div class="zone__meta zone__meta--player">
+          <p class="zone__score zone__score--player" id="playerScore">—</p>
+          <p class="zone__label">GIOCATORE</p>
+          <p class="zone__soft" id="softHint" hidden></p>
+        </div>
+
+        <div class="outcome" id="outcomePanel" hidden>
+          <div class="outcome__fx" id="outcomeFx" aria-hidden="true"></div>
+          <p class="outcome__title" id="outcomeTitle" aria-live="polite"></p>
+          <p class="outcome__sub" id="outcomeSub"></p>
+          <div class="breakdown" id="breakdown" hidden></div>
+        </div>
+      </section>
+    </main>
 
     <footer class="dock">
-      <div class="dock__row">
-        <div>
-          <span class="dock__hint">SALDO</span>
-          <strong id="balanceValue">—</strong>
+      <div class="wallet">
+        <div class="wallet__cell">
+          <span class="wallet__hint">SALDO</span>
+          <strong class="wallet__value" id="balanceValue">—</strong>
         </div>
-        <div>
-          <span class="dock__hint">PUNTATA</span>
-          <strong id="betValue">100</strong>
+        <div class="wallet__divider" aria-hidden="true"></div>
+        <div class="wallet__cell wallet__cell--bet">
+          <span class="wallet__hint">PUNTATA</span>
+          <strong class="wallet__value" id="betValue">100</strong>
         </div>
       </div>
+
       <div class="bets" id="betPresets" role="group" aria-label="Puntate"></div>
-      <button type="button" class="btn btn--gold" id="dealBtn">DISTRIBUISCI</button>
+
+      <button type="button" class="btn btn--deal" id="dealBtn">DISTRIBUISCI</button>
+
       <div class="actions" id="playActions" hidden>
-        <button type="button" class="btn" id="hitBtn">CARTA</button>
-        <button type="button" class="btn btn--gold" id="standBtn">STO</button>
+        <button type="button" class="btn btn--hit" id="hitBtn">CARTA</button>
+        <button type="button" class="btn btn--stand" id="standBtn">STO</button>
       </div>
+
       <p class="error" id="errorBox" hidden></p>
     </footer>
   </div>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>
