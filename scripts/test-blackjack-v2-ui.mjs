@@ -150,6 +150,10 @@ await recordAsync('hit adds one visual card', async () => {
 record('dealer reveal helpers present', () => {
   assert(app.includes('animateDealerReveal'), 'wired');
   assert(app.includes("mode === 'stand'"), 'stand mode');
+  assert(
+    /mode === 'hit'[\s\S]*?payload\.status === 'settled'[\s\S]*?animateDealerReveal/.test(app),
+    'hit settled also reveals dealer',
+  );
 });
 
 record('controls disabled during animation', () => {

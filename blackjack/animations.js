@@ -150,6 +150,11 @@ export async function animateDealerReveal({
     await waitAnimation(el, 400);
     el.classList?.remove?.('bj-card--enter');
   }
+
+  // Settled payloads must end with every face card visible (no leftover hole).
+  if (next.length && !next.some((c) => c?.hidden)) {
+    dealerHand.replaceChildren(...next.map((c) => createCard(c)));
+  }
 }
 
 function safeFormat(formatFn, value) {

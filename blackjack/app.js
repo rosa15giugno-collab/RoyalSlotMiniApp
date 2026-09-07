@@ -323,6 +323,17 @@ async function applyPayload(payload, { mode = 'instant' } = {}) {
           onCard: () => BlackjackAudio.dealCard(),
         });
         if (payload.player_score === 21) dom.playerScore.classList.add('is-hot');
+        // Hit→21 (or bust) auto-settles on backend — reveal dealer like STAND.
+        if (payload.status === 'settled') {
+          await animateDealerReveal({
+            dealerHand: dom.dealerHand,
+            previousDealerCards: prevDealer,
+            nextDealerCards: payload.dealer_cards,
+            createCard: createCardElement,
+            onFlip: () => BlackjackAudio.cardFlip(),
+            onCard: () => BlackjackAudio.dealCard(),
+          });
+        }
       } else {
         BlackjackAudio.stand();
         await animateDealerReveal({
@@ -338,6 +349,10 @@ async function applyPayload(payload, { mode = 'instant' } = {}) {
             ...payload.player_cards.map((card) => createCardElement(card)),
           );
         }
+      }
+      // Settled safety: DOM must match fully revealed payload cards (no hole left).
+      if (payload.status === 'settled') {
+        paintHandsInstant(payload);
       }
       paintScores(payload);
       if (payload.status === 'settled') renderOutcome(payload);
