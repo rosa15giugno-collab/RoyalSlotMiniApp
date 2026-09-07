@@ -122,7 +122,8 @@ body {
 }
 
 .brand__title {
-  margin: 2px 0 0;
+  /* Pull title up into the logo's transparent bottom padding */
+  margin: -10px 0 0;
   font-family: Cinzel, serif;
   font-size: clamp(14px, 4.2vw, 17px);
   font-weight: 700;
@@ -525,15 +526,15 @@ body {
 .outcome {
   position: relative;
   width: min(100%, 320px);
-  margin-top: 4px;
-  padding: 10px 12px 11px;
-  border-radius: 14px;
+  margin-top: 2px;
+  padding: 6px 10px 7px;
+  border-radius: 12px;
   border: 1px solid rgba(212, 176, 106, 0.35);
   background: rgba(4, 12, 8, 0.72);
   text-align: center;
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: min(28vh, 180px);
+  max-height: min(20vh, 132px);
   flex-shrink: 1;
 }
 
@@ -542,14 +543,16 @@ body {
 .outcome__title {
   margin: 0;
   font-family: Cinzel, serif;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: 0.06em;
+  line-height: 1.15;
   color: var(--gold-bright);
 }
 
 .outcome__sub {
-  margin: 4px 0 0;
-  font-size: 13px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.2;
   color: var(--ink);
   font-weight: 600;
 }
@@ -592,11 +595,11 @@ body {
 }
 
 .breakdown {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid rgba(212, 176, 106, 0.22);
   display: grid;
-  gap: 4px;
+  gap: 1px;
   text-align: left;
 }
 
@@ -605,18 +608,20 @@ body {
 .breakdown__row {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  font-size: 11px;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.25;
   color: var(--muted);
 }
 
 .breakdown__row--total {
-  margin-top: 2px;
-  padding-top: 4px;
+  margin-top: 1px;
+  padding-top: 3px;
   border-top: 1px dashed rgba(212, 176, 106, 0.28);
   color: var(--gold-bright);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.25;
 }
 
 .dock {
@@ -853,6 +858,13 @@ body {
   .table__arc { height: 12px; }
   .zone__score--player { font-size: 26px; }
   .brand__logo { width: min(46%, 140px); }
+  .brand__title { margin-top: -12px; }
+  .outcome {
+    padding: 5px 9px 6px;
+    max-height: min(18vh, 118px);
+  }
+  .outcome__title { font-size: 13px; }
+  .outcome__sub { font-size: 11px; }
   .felt__rail { opacity: 0.5; }
 }
 
