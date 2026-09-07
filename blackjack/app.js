@@ -25,6 +25,11 @@ import {
   outcomeHeadline,
   outcomeSubline,
 } from './layout.js';
+import {
+  idleRoundFields,
+  redactCurrentLog,
+  shouldResumeActiveRound,
+} from './resume-state.js';
 
 const telegram = new TelegramBridge();
 
@@ -131,6 +136,16 @@ function clearOutcomeFx() {
   dom.breakdown.replaceChildren();
   dom.playerScore.classList.remove('is-hot', 'is-bust');
   dom.dealerScore.classList.remove('is-hot');
+}
+
+/** Clear table to idle after /current has no active round. Preserves balance + bet. */
+function resetToIdle() {
+  Object.assign(state, idleRoundFields());
+  clearOutcomeFx();
+  clearError();
+  paintHandsInstant(null);
+  paintScores(null);
+  paintChrome();
 }
 
 function renderSoftHint(payload) {
@@ -568,11 +583,14 @@ async function resumeRound() {
   if (!state.authenticated) return;
   try {
     const current = await fetchCurrentRound();
-    if (current?.has_active_round && current.round) {
+    console.info('[BJ current]', redactCurrentLog(current));
+    if (shouldResumeActiveRound(current)) {
       await applyPayload(current.round, { mode: 'instant' });
+      return;
     }
+    resetToIdle();
   } catch {
-    /* idle if resume fails */
+    resetToIdle();
   }
 }
 
