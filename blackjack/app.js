@@ -145,40 +145,76 @@ function renderSoftHint(payload) {
 }
 
 function renderOutcome(payload) {
-  const kind = classifyOutcome(payload);
-  if (!kind) {
-    clearOutcomeFx();
-    return;
+  try {
+    const kind = classifyOutcome(payload);
+    if (!kind) {
+      clearOutcomeFx();
+      return;
+    }
+    dom.outcomePanel.hidden = false;
+    dom.outcomePanel.className = `outcome outcome--${kind}`;
+    dom.outcomeTitle.textContent = outcomeHeadline(kind, payload);
+    try {
+      dom.outcomeSub.textContent = outcomeSubline(kind, payload, formatChips);
+    } catch {
+      const credit = payload?.final_credit;
+      dom.outcomeSub.textContent = (kind === 'win' || kind === 'blackjack') && credit != null
+        ? `+${credit} Chips`
+        : '';
+    }
+
+    // Breakdown is OPTIONAL — never block settlement if fields are missing/odd.
+    try {
+      const rows = buildPayoutRows(payload, formatChips);
+      if (rows.length > 1) {
+        dom.breakdown.hidden = false;
+        dom.breakdown.replaceChildren(...rows.map((row) => {
+          const el = document.createElement('div');
+          el.className = `breakdown__row${row.total ? ' breakdown__row--total' : ''}`;
+          const left = document.createElement('span');
+          left.textContent = row.label;
+          const right = document.createElement('span');
+          right.textContent = row.value;
+          el.append(left, right);
+          return el;
+        }));
+      } else {
+        dom.breakdown.hidden = true;
+        dom.breakdown.replaceChildren();
+      }
+    } catch {
+      dom.breakdown.hidden = true;
+      dom.breakdown.replaceChildren();
+    }
+
+    dom.app.classList.remove('is-win', 'is-blackjack', 'is-push', 'is-lose', 'is-bust');
+    dom.app.classList.add(`is-${kind}`);
+    dom.playerScore.classList.toggle('is-bust', kind === 'bust');
+    dom.playerScore.classList.toggle('is-hot', kind === 'win' || kind === 'blackjack');
+
+    try {
+      if (kind === 'blackjack') BlackjackAudio.blackjack();
+      else if (kind === 'win') BlackjackAudio.win();
+      else if (kind === 'push') BlackjackAudio.push();
+      else if (kind === 'bust') BlackjackAudio.bust();
+      else BlackjackAudio.lose();
+    } catch {
+      /* optional FX */
+    }
+  } catch (error) {
+    console.error('[Blackjack] renderOutcome', error);
+    try {
+      dom.outcomePanel.hidden = false;
+      dom.outcomePanel.className = 'outcome outcome--win';
+      dom.outcomeTitle.textContent = String(payload?.message || 'HAI VINTO');
+      const credit = payload?.final_credit;
+      dom.outcomeSub.textContent = typeof credit === 'number' ? `+${credit} Chips` : '';
+      dom.breakdown.hidden = true;
+      dom.breakdown.replaceChildren();
+    } catch {
+      /* last resort: leave table playable */
+    }
   }
-  dom.outcomePanel.hidden = false;
-  dom.outcomePanel.className = `outcome outcome--${kind}`;
-  dom.outcomeTitle.textContent = outcomeHeadline(kind, payload);
-  dom.outcomeSub.textContent = outcomeSubline(kind, payload, formatChips);
-
-  const rows = buildPayoutRows(payload, formatChips);
-  if (rows.length > 1) {
-    dom.breakdown.hidden = false;
-    dom.breakdown.replaceChildren(...rows.map((row) => {
-      const el = document.createElement('div');
-      el.className = `breakdown__row${row.total ? ' breakdown__row--total' : ''}`;
-      el.innerHTML = `<span>${row.label}</span><span>${row.value}</span>`;
-      return el;
-    }));
-  } else {
-    dom.breakdown.hidden = true;
-    dom.breakdown.replaceChildren();
-  }
-
-  dom.app.classList.remove('is-win', 'is-blackjack', 'is-push', 'is-lose', 'is-bust');
-  dom.app.classList.add(`is-${kind}`);
-  dom.playerScore.classList.toggle('is-bust', kind === 'bust');
-  dom.playerScore.classList.toggle('is-hot', kind === 'win' || kind === 'blackjack');
-
-  if (kind === 'blackjack') BlackjackAudio.blackjack();
-  else if (kind === 'win') BlackjackAudio.win();
-  else if (kind === 'push') BlackjackAudio.push();
-  else if (kind === 'bust') BlackjackAudio.bust();
-  else BlackjackAudio.lose();
 }
 
 function paintScores(payload) {
@@ -223,10 +259,20 @@ async function setBalanceAnimated(nextBalance) {
   const prev = state.balance;
   state.balance = nextBalance;
   if (!state.authenticated || nextBalance == null) {
-    dom.balance.textContent = '—';
+    if (dom.balance) dom.balance.textContent = '—';
     return;
   }
-  await animateBalanceText(dom.balance, prev, nextBalance, formatChips);
+  try {
+    await animateBalanceText(dom.balance, prev, nextBalance, formatChips);
+  } catch {
+    if (dom.balance) {
+      try {
+        dom.balance.textContent = formatChips(nextBalance);
+      } catch {
+        dom.balance.textContent = String(nextBalance);
+      }
+    }
+  }
 }
 
 async function applyPayload(payload, { mode = 'instant' } = {}) {
@@ -243,78 +289,83 @@ async function applyPayload(payload, { mode = 'instant' } = {}) {
 
   const nextBalance = typeof payload.balance_after === 'number' ? payload.balance_after : state.balance;
 
-  if (mode === 'deal') {
+  if (mode === 'deal' || mode === 'hit' || mode === 'stand') {
     state.animating = true;
     paintChrome();
-    clearOutcomeFx();
-    paintScores({
-      ...payload,
-      // During deal, dealer full score stays hidden until settle.
-      dealer_score: payload.status === 'settled' ? payload.dealer_score : undefined,
-    });
-    if (payload.status !== 'settled') {
-      dom.dealerScore.textContent = payload.dealer_upcard_score == null
-        ? '—'
-        : String(payload.dealer_upcard_score);
+    try {
+      if (mode === 'deal') {
+        clearOutcomeFx();
+        paintScores({
+          ...payload,
+          // During deal, dealer full score stays hidden until settle.
+          dealer_score: payload.status === 'settled' ? payload.dealer_score : undefined,
+        });
+        if (payload.status !== 'settled') {
+          dom.dealerScore.textContent = payload.dealer_upcard_score == null
+            ? '—'
+            : String(payload.dealer_upcard_score);
+        }
+        await animateInitialDeal({
+          dealerHand: dom.dealerHand,
+          playerHand: dom.playerHand,
+          dealerCards: payload.dealer_cards,
+          playerCards: payload.player_cards,
+          createCard: createCardElement,
+          onCard: () => BlackjackAudio.dealCard(),
+        });
+      } else if (mode === 'hit') {
+        BlackjackAudio.hit();
+        await animateHitCard({
+          playerHand: dom.playerHand,
+          previousCount: prevPlayer.length,
+          playerCards: payload.player_cards,
+          createCard: createCardElement,
+          onCard: () => BlackjackAudio.dealCard(),
+        });
+        if (payload.player_score === 21) dom.playerScore.classList.add('is-hot');
+      } else {
+        BlackjackAudio.stand();
+        await animateDealerReveal({
+          dealerHand: dom.dealerHand,
+          previousDealerCards: prevDealer,
+          nextDealerCards: payload.dealer_cards,
+          createCard: createCardElement,
+          onFlip: () => BlackjackAudio.cardFlip(),
+          onCard: () => BlackjackAudio.dealCard(),
+        });
+        if (payload.player_cards) {
+          dom.playerHand.replaceChildren(
+            ...payload.player_cards.map((card) => createCardElement(card)),
+          );
+        }
+      }
+      paintScores(payload);
+      if (payload.status === 'settled') renderOutcome(payload);
+      await setBalanceAnimated(nextBalance);
+    } catch (error) {
+      console.error('[Blackjack] applyPayload animation', error);
+      // Presentational failure must not leave a settled round unusable.
+      try {
+        paintHandsInstant(payload);
+        paintScores(payload);
+        if (payload.status === 'settled') renderOutcome(payload);
+        else clearOutcomeFx();
+      } catch {
+        /* ignore */
+      }
+      if (typeof nextBalance === 'number') state.balance = nextBalance;
+      if (dom.balance && state.authenticated && nextBalance != null) {
+        try {
+          dom.balance.textContent = formatChips(nextBalance);
+        } catch {
+          dom.balance.textContent = String(nextBalance);
+        }
+      }
+    } finally {
+      state.animating = false;
+      if (payload.status === 'settled') state.ui = 'settled';
+      paintChrome();
     }
-    await animateInitialDeal({
-      dealerHand: dom.dealerHand,
-      playerHand: dom.playerHand,
-      dealerCards: payload.dealer_cards,
-      playerCards: payload.player_cards,
-      createCard: createCardElement,
-      onCard: () => BlackjackAudio.dealCard(),
-    });
-    paintScores(payload);
-    if (payload.status === 'settled') renderOutcome(payload);
-    await setBalanceAnimated(nextBalance);
-    state.animating = false;
-    paintChrome();
-    return;
-  }
-
-  if (mode === 'hit') {
-    state.animating = true;
-    paintChrome();
-    BlackjackAudio.hit();
-    await animateHitCard({
-      playerHand: dom.playerHand,
-      previousCount: prevPlayer.length,
-      playerCards: payload.player_cards,
-      createCard: createCardElement,
-      onCard: () => BlackjackAudio.dealCard(),
-    });
-    paintScores(payload);
-    if (payload.player_score === 21) dom.playerScore.classList.add('is-hot');
-    if (payload.status === 'settled') renderOutcome(payload);
-    await setBalanceAnimated(nextBalance);
-    state.animating = false;
-    paintChrome();
-    return;
-  }
-
-  if (mode === 'stand') {
-    state.animating = true;
-    paintChrome();
-    BlackjackAudio.stand();
-    await animateDealerReveal({
-      dealerHand: dom.dealerHand,
-      previousDealerCards: prevDealer,
-      nextDealerCards: payload.dealer_cards,
-      createCard: createCardElement,
-      onFlip: () => BlackjackAudio.cardFlip(),
-      onCard: () => BlackjackAudio.dealCard(),
-    });
-    if (payload.player_cards) {
-      dom.playerHand.replaceChildren(
-        ...payload.player_cards.map((card) => createCardElement(card)),
-      );
-    }
-    paintScores(payload);
-    if (payload.status === 'settled') renderOutcome(payload);
-    await setBalanceAnimated(nextBalance);
-    state.animating = false;
-    paintChrome();
     return;
   }
 
@@ -562,6 +613,14 @@ async function play(kind) {
       return;
     }
     clearPending();
+    state.animating = false;
+    // Never reopen a settled hand as "playing" after a presentational failure.
+    if (state.payload?.status === 'settled') {
+      state.ui = 'settled';
+      setError(error.code || 'NETWORK_ERROR');
+      paint();
+      return;
+    }
     state.ui = state.roundId ? 'playing' : 'error';
     setError(error.code || 'NETWORK_ERROR');
     paint();

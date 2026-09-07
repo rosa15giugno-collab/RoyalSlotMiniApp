@@ -20,39 +20,44 @@ export const ERROR_COPY = {
 /**
  * Presentational outcome helpers — no payout math.
  * Prefer server message; classify FX from payload fields only.
+ * Backend outcomes: "a" (win), "b" (lose), "push".
  */
 export function classifyOutcome(payload) {
   if (!payload || payload.status !== 'settled') return null;
   const message = String(payload.message || '').toLowerCase();
   const outcome = String(payload.outcome || '').toLowerCase();
   const playerScore = Number(payload.player_score);
-  const isBj = Boolean(payload.is_blackjack)
-    || message.includes('blackjack')
-    || outcome === 'blackjack'
-    || outcome === 'bj';
-  if (isBj) return 'blackjack';
+  const natural = Boolean(payload.natural_win || payload.player_blackjack || payload.is_blackjack);
+
+  // Prefer authoritative backend codes before message heuristics.
+  if (outcome === 'push' || outcome === 'p') return 'push';
+  if (outcome === 'b' || outcome === 'lose' || outcome === 'l' || outcome === 'dealer') {
+    if (Number.isFinite(playerScore) && playerScore > 21) return 'bust';
+    if (message.includes('sball') || message.includes('bust')) return 'bust';
+    return 'lose';
+  }
+  if (outcome === 'a' || outcome === 'win' || outcome === 'w' || outcome === 'blackjack' || outcome === 'bj') {
+    if (natural || message.includes('blackjack') || outcome === 'blackjack' || outcome === 'bj') {
+      return 'blackjack';
+    }
+    return 'win';
+  }
+
+  if (natural || message.includes('blackjack')) return 'blackjack';
   if (Number.isFinite(playerScore) && playerScore > 21) return 'bust';
-  if (message.includes('sball') || message.includes('bust') || outcome === 'bust') return 'bust';
+  if (message.includes('sball') || message.includes('bust')) return 'bust';
   if (
     message.includes('pareggio')
     || message.includes('push')
     || message.includes('restitu')
-    || outcome === 'push'
-    || outcome === 'p'
   ) return 'push';
   if (
     message.includes('pers')
-    || message.includes('banco')
-    || outcome === 'lose'
-    || outcome === 'l'
-    || outcome === 'dealer'
+    || message.includes('banco vince')
   ) return 'lose';
   if (
-    payload.outcome === 'a'
-    || message.includes('vinto')
+    message.includes('vinto')
     || message.includes('vinci')
-    || outcome === 'win'
-    || outcome === 'w'
     || (typeof payload.final_credit === 'number' && payload.final_credit > 0)
   ) return 'win';
   if (typeof payload.final_credit === 'number' && payload.final_credit === 0) return 'push';
@@ -71,8 +76,12 @@ export function outcomeHeadline(kind, payload) {
 
 export function outcomeSubline(kind, payload, formatChips) {
   if (kind === 'blackjack' || kind === 'win') {
-    if (typeof payload?.final_credit === 'number') {
-      return `+${formatChips(payload.final_credit)} Chips`;
+    if (typeof payload?.final_credit === 'number' && Number.isFinite(payload.final_credit)) {
+      try {
+        return `+${formatChips(payload.final_credit)} Chips`;
+      } catch {
+        return `+${payload.final_credit} Chips`;
+      }
     }
     return '';
   }
@@ -85,29 +94,46 @@ export function outcomeSubline(kind, payload, formatChips) {
 export function buildPayoutRows(payload, formatChips) {
   if (!payload || payload.status !== 'settled') return [];
   if (!(typeof payload.final_credit === 'number' && payload.final_credit > 0)) return [];
+  // Push refunds bet into final_credit — not a win breakdown.
+  if (String(payload.outcome || '').toLowerCase() === 'push') return [];
 
   const rows = [];
-  const base = payload.base_credit ?? payload.base_win ?? payload.base_payout;
-  if (typeof base === 'number') {
-    rows.push({ label: 'Vincita base', value: formatChips(base) });
+  const safeFormat = (value) => {
+    try {
+      return formatChips(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  // Backend field is payout_base (not base_credit).
+  const base = payload.payout_base ?? payload.base_credit ?? payload.base_win ?? payload.base_payout;
+  if (typeof base === 'number' && Number.isFinite(base)) {
+    rows.push({ label: 'Vincita base', value: safeFormat(base) });
   }
 
   if (payload.vip_applied && typeof payload.vip_extra === 'number') {
     const tier = payload.vip_tier || payload.vip_label || 'VIP';
-    rows.push({ label: String(tier), value: `+${formatChips(payload.vip_extra)}` });
-  } else if (payload.vip_applied && payload.vip_multiplier) {
+    rows.push({ label: String(tier), value: `+${safeFormat(payload.vip_extra)}` });
+  } else if (payload.vip_applied && payload.vip_multiplier != null && Number(payload.vip_multiplier) > 1) {
     rows.push({ label: `VIP ×${payload.vip_multiplier}`, value: '' });
   }
 
   if (typeof payload.level_multiplier === 'number' && payload.level_multiplier > 1) {
-    const block = payload.level_block != null ? ` ${payload.level_block}` : '';
-    rows.push({ label: `Livello${block} ×${String(payload.level_multiplier).replace('.', ',')}`, value: '' });
+    const block = payload.level_block != null && payload.level_block !== ''
+      ? ` ${payload.level_block}`
+      : '';
+    rows.push({
+      label: `Livello${block} ×${String(payload.level_multiplier).replace('.', ',')}`,
+      value: '',
+    });
   }
 
   if (payload.daily_applied && payload.daily_multiplier) {
     rows.push({ label: `Bonus Daily ×${payload.daily_multiplier}`, value: '' });
   }
 
-  rows.push({ label: 'TOTALE', value: formatChips(payload.final_credit), total: true });
+  if (rows.length === 0) return [];
+  rows.push({ label: 'TOTALE', value: safeFormat(payload.final_credit), total: true });
   return rows;
 }

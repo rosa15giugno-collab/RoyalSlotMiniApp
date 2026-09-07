@@ -170,8 +170,9 @@ record('result states', () => {
 record('payout breakdown', () => {
   const rows = buildPayoutRows({
     status: 'settled',
+    outcome: 'a',
     final_credit: 6240,
-    base_credit: 2000,
+    payout_base: 2000,
     vip_applied: true,
     vip_extra: 600,
     vip_tier: 'VIP Gold',
@@ -186,6 +187,7 @@ record('payout breakdown', () => {
   assert(rows.some((r) => r.label.includes('Daily')), 'daily');
   assert(rows.at(-1).total && rows.at(-1).value === '6240', 'total server value');
   assert(buildPayoutRows({ status: 'settled', final_credit: 0 }, String).length === 0, 'no empty win rows');
+  assert(buildPayoutRows({ status: 'settled', outcome: 'a', final_credit: 200 }, String).length === 0, 'optional missing → empty');
 });
 
 record('responsive class/hooks', () => {

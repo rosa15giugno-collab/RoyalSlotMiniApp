@@ -152,26 +152,55 @@ export async function animateDealerReveal({
   }
 }
 
+function safeFormat(formatFn, value) {
+  try {
+    return formatFn(value);
+  } catch {
+    return value == null ? '—' : String(value);
+  }
+}
+
+/**
+ * Animate balance text. Always resolves (hard timeout) so settlement
+ * cannot get stuck with animating=true.
+ */
 export function animateBalanceText(node, fromValue, toValue, formatFn, durationMs = 520) {
   if (!node) return Promise.resolve();
   if (fromValue == null || toValue == null || fromValue === toValue || prefersReducedMotion()) {
-    node.textContent = toValue == null ? '—' : formatFn(toValue);
+    node.textContent = toValue == null ? '—' : safeFormat(formatFn, toValue);
     return Promise.resolve();
   }
-  const start = performance.now();
+  const nowFn = typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? () => performance.now()
+    : () => Date.now();
+  const start = nowFn();
   const delta = toValue - fromValue;
+  const raf = typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : (cb) => setTimeout(() => cb(nowFn()), 16);
+
   return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      node.textContent = safeFormat(formatFn, toValue);
+      resolve();
+    };
     const tick = (now) => {
-      const t = Math.min(1, (now - start) / durationMs);
-      const eased = 1 - (1 - t) ** 3;
-      const value = Math.round(fromValue + delta * eased);
-      node.textContent = formatFn(value);
-      if (t < 1) requestAnimationFrame(tick);
-      else {
-        node.textContent = formatFn(toValue);
-        resolve();
+      if (done) return;
+      try {
+        const t = Math.min(1, (now - start) / durationMs);
+        const eased = 1 - (1 - t) ** 3;
+        const value = Math.round(fromValue + delta * eased);
+        node.textContent = safeFormat(formatFn, value);
+        if (t < 1) raf(tick);
+        else finish();
+      } catch {
+        finish();
       }
     };
-    requestAnimationFrame(tick);
+    raf(tick);
+    setTimeout(finish, Math.max(durationMs + 200, 800));
   });
 }
