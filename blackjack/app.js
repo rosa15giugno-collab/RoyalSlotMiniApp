@@ -664,7 +664,7 @@ function buildBets() {
   BETS.forEach((amount) => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'bet-chip';
+    btn.className = `bet-chip bet-chip--${amount}`;
     btn.dataset.bet = String(amount);
     btn.textContent = String(amount);
     btn.setAttribute('aria-label', `Puntata ${amount}`);

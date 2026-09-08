@@ -112,9 +112,9 @@ record('log temporaneo [BJ current] redacted', () => {
   assert(app.includes("[BJ current]"), 'logged');
 });
 
-record('cache bust app v=6 style v=7', () => {
-  assert(html.includes('app.js?v=6'), 'app bust');
-  assert(html.includes('style.css?v=7'), 'css bust');
+record('cache bust app v=7 style v=9', () => {
+  assert(html.includes('app.js?v=7'), 'app bust');
+  assert(html.includes('style.css?v=9'), 'css bust');
 });
 
 const failed = results.filter((item) => !item.ok);

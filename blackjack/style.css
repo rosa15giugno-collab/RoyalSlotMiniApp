@@ -122,8 +122,8 @@ body {
 }
 
 .brand__title {
-  /* Pull title up into the logo's transparent bottom padding */
-  margin: -10px 0 0;
+  /* Pull title closer to logo mark */
+  margin: -16px 0 0;
   font-family: Cinzel, serif;
   font-size: clamp(14px, 4.2vw, 17px);
   font-weight: 700;
@@ -525,16 +525,16 @@ body {
 
 .outcome {
   position: relative;
-  width: min(100%, 320px);
-  margin-top: 2px;
-  padding: 6px 10px 7px;
-  border-radius: 12px;
+  width: min(100%, 300px);
+  margin-top: 1px;
+  padding: 4px 8px 5px;
+  border-radius: 10px;
   border: 1px solid rgba(212, 176, 106, 0.35);
-  background: rgba(4, 12, 8, 0.72);
+  background: rgba(4, 12, 8, 0.78);
   text-align: center;
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: min(20vh, 132px);
+  max-height: min(16vh, 112px);
   flex-shrink: 1;
 }
 
@@ -543,16 +543,16 @@ body {
 .outcome__title {
   margin: 0;
   font-family: Cinzel, serif;
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  line-height: 1.15;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  line-height: 1.1;
   color: var(--gold-bright);
 }
 
 .outcome__sub {
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.2;
+  margin: 1px 0 0;
+  font-size: 11px;
+  line-height: 1.15;
   color: var(--ink);
   font-weight: 600;
 }
@@ -595,11 +595,11 @@ body {
 }
 
 .breakdown {
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(212, 176, 106, 0.22);
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(212, 176, 106, 0.2);
   display: grid;
-  gap: 1px;
+  gap: 0;
   text-align: left;
 }
 
@@ -608,20 +608,20 @@ body {
 .breakdown__row {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  font-size: 10px;
-  line-height: 1.25;
+  gap: 6px;
+  font-size: 9px;
+  line-height: 1.2;
   color: var(--muted);
 }
 
 .breakdown__row--total {
   margin-top: 1px;
-  padding-top: 3px;
+  padding-top: 2px;
   border-top: 1px dashed rgba(212, 176, 106, 0.28);
   color: var(--gold-bright);
   font-weight: 700;
-  font-size: 11px;
-  line-height: 1.25;
+  font-size: 10px;
+  line-height: 1.2;
 }
 
 .dock {
@@ -674,100 +674,166 @@ body {
 .bets {
   display: flex;
   justify-content: center;
-  gap: 14px;
+  gap: 16px;
+  padding: 2px 0 4px;
 }
 
+/* Physical casino chips — clay/ceramic feel, shared gold accents */
 .bet-chip {
+  --chip-rim: #c9a45a;
+  --chip-rim-dark: #2a1c0a;
+  --chip-face: #1a1208;
+  --chip-face-mid: #24180c;
+  --chip-face-deep: #100b05;
+  --chip-ink: #f0d9a0;
+  --chip-ring: rgba(212, 176, 106, 0.42);
+  --chip-active-face: #f0d9a0;
+  --chip-active-ink: #24180a;
+
   position: relative;
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   border: 0;
   padding: 0;
-  color: var(--gold-bright);
+  color: var(--chip-ink);
   font-family: Cinzel, serif;
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.01em;
   isolation: isolate;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12),
+    0 -1px 0 rgba(0, 0, 0, 0.35);
+  /* Edge bevel + thickness */
   background:
-    radial-gradient(circle at 50% 50%, #1a1208 0 54%, transparent 55%),
+    /* center disk cutout for face (::before) */
+    radial-gradient(circle at 50% 50%, transparent 0 49%, rgba(0, 0, 0, 0.22) 50%, transparent 52%),
+    radial-gradient(circle at 50% 50%, var(--chip-face) 0 48%, transparent 49%),
+    /* outer rim segments */
     conic-gradient(
-      from 0deg,
-      #c9a45a 0 18deg,
-      #2a1c0a 18deg 36deg,
-      #c9a45a 36deg 54deg,
-      #2a1c0a 54deg 72deg,
-      #c9a45a 72deg 90deg,
-      #2a1c0a 90deg 108deg,
-      #c9a45a 108deg 126deg,
-      #2a1c0a 126deg 144deg,
-      #c9a45a 144deg 162deg,
-      #2a1c0a 162deg 180deg,
-      #c9a45a 180deg 198deg,
-      #2a1c0a 198deg 216deg,
-      #c9a45a 216deg 234deg,
-      #2a1c0a 234deg 252deg,
-      #c9a45a 252deg 270deg,
-      #2a1c0a 270deg 288deg,
-      #c9a45a 288deg 306deg,
-      #2a1c0a 306deg 324deg,
-      #c9a45a 324deg 342deg,
-      #2a1c0a 342deg 360deg
+      from 8deg,
+      var(--chip-rim) 0 14deg,
+      var(--chip-rim-dark) 14deg 28deg,
+      var(--chip-rim) 28deg 42deg,
+      var(--chip-rim-dark) 42deg 56deg,
+      var(--chip-rim) 56deg 70deg,
+      var(--chip-rim-dark) 70deg 84deg,
+      var(--chip-rim) 84deg 98deg,
+      var(--chip-rim-dark) 98deg 112deg,
+      var(--chip-rim) 112deg 126deg,
+      var(--chip-rim-dark) 126deg 140deg,
+      var(--chip-rim) 140deg 154deg,
+      var(--chip-rim-dark) 154deg 168deg,
+      var(--chip-rim) 168deg 182deg,
+      var(--chip-rim-dark) 182deg 196deg,
+      var(--chip-rim) 196deg 210deg,
+      var(--chip-rim-dark) 210deg 224deg,
+      var(--chip-rim) 224deg 238deg,
+      var(--chip-rim-dark) 238deg 252deg,
+      var(--chip-rim) 252deg 266deg,
+      var(--chip-rim-dark) 266deg 280deg,
+      var(--chip-rim) 280deg 294deg,
+      var(--chip-rim-dark) 294deg 308deg,
+      var(--chip-rim) 308deg 322deg,
+      var(--chip-rim-dark) 322deg 336deg,
+      var(--chip-rim) 336deg 350deg,
+      var(--chip-rim-dark) 350deg 360deg
     );
   box-shadow:
-    0 8px 16px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    0 1px 0 rgba(255, 255, 255, 0.14),
+    0 10px 14px rgba(0, 0, 0, 0.42),
+    0 3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 1px 1px rgba(255, 255, 255, 0.16),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.28);
 }
 
 .bet-chip::before {
   content: '';
   position: absolute;
-  inset: 7px;
+  inset: 9px;
   border-radius: 50%;
-  border: 1px solid rgba(240, 217, 160, 0.35);
+  border: 1.5px solid var(--chip-ring);
   background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.12), transparent 42%),
-    radial-gradient(circle at 50% 55%, #24180c, #100b05);
+    /* soft top highlight — matte, not neon */
+    radial-gradient(ellipse 70% 45% at 35% 28%, rgba(255, 255, 255, 0.18), transparent 55%),
+    /* recessed center */
+    radial-gradient(circle at 50% 55%, var(--chip-face-mid) 0 62%, var(--chip-face-deep) 100%);
+  box-shadow:
+    inset 0 3px 5px rgba(0, 0, 0, 0.28),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.18);
   z-index: -1;
 }
 
+.bet-chip::after {
+  content: '';
+  position: absolute;
+  inset: 15px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 176, 106, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 100 — warm ivory / deep teal */
+.bet-chip--100 {
+  --chip-rim: #e6dcc8;
+  --chip-rim-dark: #1f5a62;
+  --chip-face: #e4d8c2;
+  --chip-face-mid: #dccfb6;
+  --chip-face-deep: #c4b49a;
+  --chip-ink: #1a3539;
+  --chip-ring: rgba(31, 90, 98, 0.55);
+  --chip-active-face: #ebe0cc;
+  --chip-active-ink: #12282c;
+}
+
+/* 500 — deep muted purple / elegant gold */
+.bet-chip--500 {
+  --chip-rim: #c9ae72;
+  --chip-rim-dark: #3a1f58;
+  --chip-face: #4a2d68;
+  --chip-face-mid: #42285e;
+  --chip-face-deep: #27153c;
+  --chip-ink: #ead9b0;
+  --chip-ring: rgba(201, 174, 114, 0.45);
+  --chip-active-face: #553575;
+  --chip-active-ink: #f0e2bd;
+}
+
+/* 1000 — onyx / gold (material reference for the set) */
+.bet-chip--1000 {
+  --chip-rim: #e8d09a;
+  --chip-rim-dark: #0c0c0c;
+  --chip-face: #1a1a1a;
+  --chip-face-mid: #151515;
+  --chip-face-deep: #070707;
+  --chip-ink: #f0e0b4;
+  --chip-ring: rgba(232, 208, 154, 0.5);
+  --chip-active-face: #242424;
+  --chip-active-ink: #ffe7b0;
+}
+
 .bet-chip.is-active {
-  color: #24180a;
-  background:
-    radial-gradient(circle at 50% 50%, #f0d9a0 0 54%, transparent 55%),
-    conic-gradient(
-      from 0deg,
-      #fff1c8 0 18deg,
-      #b8893d 18deg 36deg,
-      #fff1c8 36deg 54deg,
-      #b8893d 54deg 72deg,
-      #fff1c8 72deg 90deg,
-      #b8893d 90deg 108deg,
-      #fff1c8 108deg 126deg,
-      #b8893d 126deg 144deg,
-      #fff1c8 144deg 162deg,
-      #b8893d 162deg 180deg,
-      #fff1c8 180deg 198deg,
-      #b8893d 198deg 216deg,
-      #fff1c8 216deg 234deg,
-      #b8893d 234deg 252deg,
-      #fff1c8 252deg 270deg,
-      #b8893d 270deg 288deg,
-      #fff1c8 288deg 306deg,
-      #b8893d 306deg 324deg,
-      #fff1c8 324deg 342deg,
-      #b8893d 342deg 360deg
-    );
+  color: var(--chip-active-ink);
+  transform: translateY(-3px);
   box-shadow:
-    0 0 0 2px rgba(240, 217, 160, 0.28),
-    0 10px 18px rgba(0, 0, 0, 0.38);
+    0 0 0 1.5px rgba(212, 176, 106, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.18),
+    0 12px 16px rgba(0, 0, 0, 0.4),
+    0 4px 0 rgba(0, 0, 0, 0.32),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.25);
 }
 
 .bet-chip.is-active::before {
-  border-color: rgba(120, 80, 20, 0.35);
+  border-color: rgba(232, 208, 154, 0.72);
   background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.5), transparent 42%),
-    linear-gradient(160deg, #f7e7bf, #d4b06a 60%, #b8893d);
+    radial-gradient(ellipse 70% 45% at 35% 26%, rgba(255, 255, 255, 0.22), transparent 55%),
+    radial-gradient(circle at 50% 55%, var(--chip-active-face) 0 62%, var(--chip-face-deep) 100%);
 }
 
 .actions {
@@ -858,13 +924,13 @@ body {
   .table__arc { height: 12px; }
   .zone__score--player { font-size: 26px; }
   .brand__logo { width: min(46%, 140px); }
-  .brand__title { margin-top: -12px; }
+  .brand__title { margin-top: -18px; }
   .outcome {
-    padding: 5px 9px 6px;
-    max-height: min(18vh, 118px);
+    padding: 3px 7px 4px;
+    max-height: min(14vh, 98px);
   }
-  .outcome__title { font-size: 13px; }
-  .outcome__sub { font-size: 11px; }
+  .outcome__title { font-size: 12px; }
+  .outcome__sub { font-size: 10px; }
   .felt__rail { opacity: 0.5; }
 }
 
