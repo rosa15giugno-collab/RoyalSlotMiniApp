@@ -254,6 +254,38 @@ body {
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
 }
 
+.streak {
+  margin: 2px auto 0;
+  max-width: max-content;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 176, 106, 0.28);
+  background: rgba(6, 22, 14, 0.72);
+  color: rgba(240, 217, 160, 0.92);
+  font-family: Manrope, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+}
+
+.streak.is-royal {
+  border-color: rgba(255, 196, 92, 0.55);
+  color: #ffe7b0;
+  text-shadow: 0 0 10px rgba(255, 180, 64, 0.35);
+}
+
+.streak.is-glow {
+  animation: streakGlow 0.9s ease-out;
+}
+
+@keyframes streakGlow {
+  0% { box-shadow: 0 0 0 rgba(255, 196, 92, 0); transform: scale(0.96); }
+  40% { box-shadow: 0 0 18px rgba(255, 180, 64, 0.45); transform: scale(1.04); }
+  100% { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28); transform: scale(1); }
+}
+
 .hand {
   display: flex;
   justify-content: center;
@@ -778,8 +810,8 @@ body {
   z-index: -1;
 }
 
-/* 100 — warm ivory / deep teal */
-.bet-chip--100 {
+/* 500 — warm ivory / deep teal (was 100) */
+.bet-chip--500 {
   --chip-rim: #e6dcc8;
   --chip-rim-dark: #1f5a62;
   --chip-face: #e4d8c2;
@@ -791,8 +823,8 @@ body {
   --chip-active-ink: #12282c;
 }
 
-/* 500 — deep muted purple / elegant gold */
-.bet-chip--500 {
+/* 1000 — deep muted purple / elegant gold (was 500) */
+.bet-chip--1000 {
   --chip-rim: #c9ae72;
   --chip-rim-dark: #3a1f58;
   --chip-face: #4a2d68;
@@ -804,8 +836,8 @@ body {
   --chip-active-ink: #f0e2bd;
 }
 
-/* 1000 — onyx / gold (material reference for the set) */
-.bet-chip--1000 {
+/* 2000 — onyx / gold */
+.bet-chip--2000 {
   --chip-rim: #e8d09a;
   --chip-rim-dark: #0c0c0c;
   --chip-face: #1a1a1a;
@@ -840,6 +872,13 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.actions[hidden],
+#dealBtn[hidden],
+#hitBtn[hidden],
+#standBtn[hidden] {
+  display: none !important;
 }
 
 .btn {
@@ -943,7 +982,8 @@ body {
   .felt.is-bust .hand--player,
   .felt.is-win .zone__score--player,
   .felt.is-blackjack .zone__score--player,
-  .felt.is-lose {
+  .felt.is-lose,
+  .streak.is-glow {
     animation: none !important;
   }
 }

@@ -1,5 +1,5 @@
-export const BETS = [100, 500, 1000];
-export const DEFAULT_BET = 100;
+export const BETS = [500, 1000, 2000];
+export const DEFAULT_BET = 500;
 
 export { SUIT_SYMBOL, RED_SUITS } from './card-ui.js';
 
@@ -90,6 +90,13 @@ export function outcomeSubline(kind, payload, formatChips) {
   return '';
 }
 
+function formatMult(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  if (Number.isInteger(n)) return String(n);
+  return String(n).replace('.', ',');
+}
+
 /** Build payout breakdown rows only from fields present on the payload. */
 export function buildPayoutRows(payload, formatChips) {
   if (!payload || payload.status !== 'settled') return [];
@@ -112,28 +119,53 @@ export function buildPayoutRows(payload, formatChips) {
     rows.push({ label: 'Vincita base', value: safeFormat(base) });
   }
 
-  if (payload.vip_applied && typeof payload.vip_extra === 'number') {
-    const tier = payload.vip_tier || payload.vip_label || 'VIP';
-    rows.push({ label: String(tier), value: `+${safeFormat(payload.vip_extra)}` });
-  } else if (payload.vip_applied && payload.vip_multiplier != null && Number(payload.vip_multiplier) > 1) {
-    rows.push({ label: `VIP ×${payload.vip_multiplier}`, value: '' });
-  }
-
-  if (typeof payload.level_multiplier === 'number' && payload.level_multiplier > 1) {
-    const block = payload.level_block != null && payload.level_block !== ''
-      ? ` ${payload.level_block}`
-      : '';
+  if (payload.streak_bonus_applied && Number(payload.streak_multiplier) > 1) {
+    const after = payload.after_streak;
     rows.push({
-      label: `Livello${block} ×${String(payload.level_multiplier).replace('.', ',')}`,
-      value: '',
+      label: `Royal Streak ×${formatMult(payload.streak_multiplier)}`,
+      value: typeof after === 'number' ? safeFormat(after) : '',
     });
   }
 
-  if (payload.daily_applied && payload.daily_multiplier) {
-    rows.push({ label: `Bonus Daily ×${payload.daily_multiplier}`, value: '' });
+  if (payload.vip_applied && Number(payload.vip_multiplier) > 1) {
+    const pct = Math.round((Number(payload.vip_multiplier) - 1) * 100);
+    const after = payload.after_vip;
+    rows.push({
+      label: `VIP +${pct}%`,
+      value: typeof after === 'number' ? safeFormat(after) : (
+        typeof payload.vip_extra === 'number' ? `+${safeFormat(payload.vip_extra)}` : ''
+      ),
+    });
+  } else if (payload.vip_applied && typeof payload.vip_extra === 'number') {
+    const tier = payload.vip_tier || payload.vip_label || 'VIP';
+    rows.push({ label: String(tier), value: `+${safeFormat(payload.vip_extra)}` });
+  }
+
+  if (typeof payload.level_multiplier === 'number' && payload.level_multiplier > 1) {
+    const after = payload.after_level;
+    rows.push({
+      label: `Livello ×${formatMult(payload.level_multiplier)}`,
+      value: typeof after === 'number' ? safeFormat(after) : '',
+    });
+  }
+
+  if (payload.daily_applied && Number(payload.daily_multiplier) > 1) {
+    rows.push({
+      label: `Bonus giornaliero ×${formatMult(payload.daily_multiplier)}`,
+      value: '',
+    });
   }
 
   if (rows.length === 0) return [];
   rows.push({ label: 'TOTALE', value: safeFormat(payload.final_credit), total: true });
   return rows;
+}
+
+/** Streak badge copy — server fields only. */
+export function streakBadgeText(payload) {
+  const count = Number(payload?.streak_count || 0);
+  const mult = Number(payload?.streak_multiplier || 1);
+  if (!Number.isFinite(count) || count < 2) return '';
+  if (count >= 10) return `🔥 ROYAL STREAK ×${formatMult(mult || 10)}`;
+  return `🔥 SERIE ${count} · ×${formatMult(mult)}`;
 }

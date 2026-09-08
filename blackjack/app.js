@@ -24,6 +24,7 @@ import {
   classifyOutcome,
   outcomeHeadline,
   outcomeSubline,
+  streakBadgeText,
 } from './layout.js';
 import {
   idleRoundFields,
@@ -50,6 +51,8 @@ const state = {
   animating: false,
   /** @type {{ kind: 'start'|'hit'|'stand', actionId: string, bet?: number, roundId?: string } | null} */
   pending: null,
+  streak: { streak_count: 0, streak_multiplier: 1 },
+  _prevStreak: 0,
 };
 
 const dom = {
@@ -71,6 +74,7 @@ const dom = {
   hitBtn: document.getElementById('hitBtn'),
   standBtn: document.getElementById('standBtn'),
   errorBox: document.getElementById('errorBox'),
+  streakBadge: document.getElementById('streakBadge'),
 };
 
 function newActionId() {
@@ -124,6 +128,35 @@ function paintHandsInstant(payload) {
   // Preserve hole secrecy: render card?.hidden backs only.
   dom.dealerHand.replaceChildren(...dealer.map((card) => createCardElement(card)));
   dom.playerHand.replaceChildren(...player.map((card) => createCardElement(card)));
+}
+
+function renderStreak(payload) {
+  if (!dom.streakBadge) return;
+  if (payload && typeof payload.streak_count === 'number') {
+    state.streak = {
+      streak_count: Number(payload.streak_count) || 0,
+      streak_multiplier: Number(payload.streak_multiplier) || 1,
+      royal_streak: Boolean(payload.royal_streak),
+    };
+  }
+  const text = streakBadgeText(state.streak);
+  const count = Number(state.streak.streak_count || 0);
+  const grew = count > state._prevStreak;
+  state._prevStreak = count;
+  if (!text) {
+    dom.streakBadge.hidden = true;
+    dom.streakBadge.textContent = '';
+    dom.streakBadge.classList.remove('is-glow', 'is-royal');
+    return;
+  }
+  dom.streakBadge.hidden = false;
+  dom.streakBadge.textContent = text;
+  dom.streakBadge.classList.toggle('is-royal', count >= 10);
+  if (grew || count >= 10) {
+    dom.streakBadge.classList.remove('is-glow');
+    void dom.streakBadge.offsetWidth;
+    dom.streakBadge.classList.add('is-glow');
+  }
 }
 
 function clearOutcomeFx() {
@@ -254,10 +287,21 @@ function paintChrome() {
   else if (state.balance != null) dom.balance.textContent = formatChips(state.balance);
   else dom.balance.textContent = '—';
 
-  const playing = state.ui === 'playing' || state.ui === 'action_pending' || state.ui === 'recovering';
-  dom.playActions.hidden = !playing;
-  // Hide DISTRIBUISCI while an active round is in play (resume or live).
-  dom.dealBtn.hidden = playing;
+  const status = state.payload?.status;
+  const settled = status === 'settled' || state.ui === 'settled';
+  // Active hand only: show CARTA/STO, hide DISTRIBUISCI.
+  // Settled / idle: show DISTRIBUISCI, fully hide CARTA/STO (not disabled ghosts).
+  const inPlay = !settled && (
+    status === 'player_turn'
+    || state.ui === 'playing'
+    || state.ui === 'action_pending'
+    || state.ui === 'recovering'
+  );
+
+  dom.dealBtn.hidden = inPlay;
+  dom.playActions.hidden = !inPlay;
+  dom.hitBtn.hidden = !inPlay;
+  dom.standBtn.hidden = !inPlay;
   setBusy(busy());
 }
 
@@ -266,6 +310,7 @@ function paint() {
   paintChrome();
   paintHandsInstant(payload);
   paintScores(payload);
+  renderStreak(payload);
   if (payload?.status === 'settled') renderOutcome(payload);
   else clearOutcomeFx();
 }
@@ -298,6 +343,7 @@ async function applyPayload(payload, { mode = 'instant' } = {}) {
   state.payload = payload;
   state.roundId = payload.round_id;
   if (typeof payload.bet === 'number') state.bet = payload.bet;
+  renderStreak(payload);
 
   if (payload.status === 'settled') state.ui = 'settled';
   else if (payload.status === 'player_turn') state.ui = 'playing';
@@ -587,6 +633,9 @@ async function resumeRound() {
     if (shouldResumeActiveRound(current)) {
       await applyPayload(current.round, { mode: 'instant' });
       return;
+    }
+    if (typeof current?.streak_count === 'number') {
+      renderStreak(current);
     }
     resetToIdle();
   } catch {
