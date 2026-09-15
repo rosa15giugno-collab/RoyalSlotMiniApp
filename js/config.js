@@ -16,6 +16,7 @@ export const CONFIG = {
       blackjackHit: '/api/blackjack/hit',
       blackjackStand: '/api/blackjack/stand',
       blackjackCurrent: '/api/blackjack/current',
+      rouletteSpin: '/api/roulette/spin',
     },
   },
 

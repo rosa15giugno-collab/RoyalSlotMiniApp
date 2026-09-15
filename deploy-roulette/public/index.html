@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#06140e">
+  <title>Roulette Royale — CASINÒ by Rosa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=25">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="felt" id="app" data-scene="BETTING">
+    <div class="felt__glow" aria-hidden="true"></div>
+    <div class="felt__vignette" aria-hidden="true"></div>
+
+    <button
+      type="button"
+      class="audio-toggle"
+      id="muteBtn"
+      aria-pressed="false"
+      aria-label="Attiva o disattiva audio"
+      title="Disattiva audio"
+    >&#128266;</button>
+
+    <!-- ========== SCENA BETTING ========== -->
+    <section class="scene scene--betting" id="sceneBetting" data-scene-panel="BETTING">
+      <header class="brand brand--compact">
+        <img
+          class="brand__logo"
+          src="assets/brand/casino-by-rosa-logo.png?v=4"
+          alt="CASINÒ by Rosa"
+          width="640"
+          height="426"
+          decoding="async"
+        >
+        <h1 class="brand__title">ROULETTE ROYALE</h1>
+        <div class="brand__rule" aria-hidden="true"></div>
+      </header>
+
+      <div class="selection selection--betting" aria-label="Puntata, importo e saldo">
+        <div class="selection__cell">
+          <span class="selection__hint">PUNTATA</span>
+          <strong class="selection__value" id="betTypeLabel">—</strong>
+        </div>
+        <div class="selection__divider" aria-hidden="true"></div>
+        <div class="selection__cell">
+          <span class="selection__hint">IMPORTO</span>
+          <strong class="selection__value" id="betAmountLabel">500</strong>
+        </div>
+        <div class="selection__divider" aria-hidden="true"></div>
+        <div class="selection__cell selection__cell--saldo">
+          <span class="selection__hint">SALDO</span>
+          <strong class="selection__value" id="balanceValue">—</strong>
+        </div>
+      </div>
+
+      <section class="history" id="historyStrip" aria-label="Ultimi numeri" hidden>
+        <span class="history__label">ULTIMI:</span>
+        <div class="history__row" id="historyRow"></div>
+      </section>
+
+      <section class="board" aria-label="Tappeto puntate">
+        <div class="board__table">
+          <div class="board__cloth">
+            <div class="board__nap" aria-hidden="true"></div>
+            <div class="board__print">
+              <div class="board__grid" id="numberGrid" role="group" aria-label="Numeri 0-36"></div>
+              <div class="board__dozens" id="dozenBets" role="group" aria-label="Decine"></div>
+              <div class="board__outside" id="outsideBets" role="group" aria-label="Puntate esterne"></div>
+            </div>
+            <div class="board__sheen" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="dock dock--betting">
+        <div class="chips" id="chipPresets" role="group" aria-label="Fiches"></div>
+        <button type="button" class="btn btn--spin" id="spinBtn">GIRA LA ROULETTE</button>
+        <p class="error" id="errorBox" hidden></p>
+      </footer>
+    </section>
+
+    <!-- ========== SCENA SPINNING ========== -->
+    <section class="scene scene--spinning" id="sceneSpinning" data-scene-panel="SPINNING" hidden>
+      <header class="spin-brand">
+        <img
+          class="spin-brand__logo"
+          src="assets/brand/casino-by-rosa-logo.png?v=4"
+          alt="CASINÒ by Rosa"
+          width="640"
+          height="426"
+          decoding="async"
+        >
+        <h1 class="spin-brand__title">ROULETTE ROYALE</h1>
+        <p class="spin-suspense" id="spinSuspense" aria-live="polite">La fortuna sta girando...</p>
+      </header>
+
+      <div class="wheel wheel--hero" id="wheelMount"></div>
+
+      <div class="spin-hud spin-hud--footer" aria-label="Puntata in gioco">
+        <div class="spin-hud__cell">
+          <span class="spin-hud__hint">PUNTATA</span>
+          <strong class="spin-hud__value" id="spinBetLabel">—</strong>
+        </div>
+        <div class="spin-hud__divider" aria-hidden="true"></div>
+        <div class="spin-hud__cell">
+          <span class="spin-hud__hint">IMPORTO</span>
+          <strong class="spin-hud__value" id="spinAmountLabel">500</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SCENA RESULT ========== -->
+    <section class="scene scene--result" id="sceneResult" data-scene-panel="RESULT" hidden>
+      <p class="result-kicker" id="resultKicker" hidden></p>
+      <div class="result-hero" id="resultHero">
+        <p class="result-hero__label" id="resultColorLabel"></p>
+        <p class="result-hero__number" id="resultNumber">—</p>
+      </div>
+
+      <div class="result-card" id="outcomePanel">
+        <p class="result-card__title" id="outcomeTitle" aria-live="polite"></p>
+        <p class="result-card__sub" id="outcomeSub"></p>
+        <div class="breakdown" id="breakdown" hidden></div>
+      </div>
+
+      <section class="history history--result" id="resultHistoryStrip" aria-label="Ultimi numeri" hidden>
+        <span class="history__label">ULTIMI:</span>
+        <div class="history__row" id="resultHistoryRow"></div>
+      </section>
+
+      <button type="button" class="btn btn--again" id="againBtn">NUOVA PUNTATA</button>
+    </section>
+
+    <!-- ========== SCENA NETWORK ERROR ========== -->
+    <section class="scene scene--error" id="sceneNetwork" data-scene-panel="NETWORK_ERROR" hidden>
+      <div class="error-panel">
+        <p class="error-panel__title">ERRORE DI CONNESSIONE</p>
+        <p class="error-panel__copy" id="networkErrorCopy">Connessione interrotta. Riprova con lo stesso tentativo.</p>
+        <button type="button" class="btn btn--spin" id="retryBtn">RIPROVA</button>
+      </div>
+    </section>
+
+    <!-- ========== SCENA AUTH ERROR ========== -->
+    <section class="scene scene--error" id="sceneAuth" data-scene-panel="AUTH_ERROR" hidden>
+      <div class="error-panel">
+        <p class="error-panel__title">AUTH</p>
+        <p class="error-panel__copy" id="authErrorCopy">Apri Roulette direttamente da Telegram per giocare.</p>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="app.js?v=30"></script>
+</body>
+</html>

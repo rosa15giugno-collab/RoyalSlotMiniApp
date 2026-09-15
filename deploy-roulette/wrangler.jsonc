@@ -1,0 +1,10 @@
+{
+  "name": "roulette",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}
