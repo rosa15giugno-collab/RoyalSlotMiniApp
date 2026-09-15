@@ -2,8 +2,37 @@
  * Roulette Mini App — pure layout / bet helpers (no DOM, no payout math).
  */
 
+import {
+  normalizeCorner,
+  normalizeSplit,
+  splitKey,
+  cornerKey,
+  uniqSorted,
+} from './table-geometry.js?v=12';
+
+export {
+  TABLE_EDGE,
+  ZERO_SPLIT_BAND,
+  MAGNET,
+  aimPreviewLabel,
+  buildMagneticSnaps,
+  coveredNumbers,
+  isValidCornerNumbers,
+  isValidSplitNumbers,
+  normalizeCorner,
+  normalizeSplit,
+  numberCell,
+  numbersInCell,
+  pickMagneticSnap,
+  resolveInsideSpot,
+  resolveZeroSpot,
+  uniqSorted,
+} from './table-geometry.js?v=12';
+
 export const BETS = [500, 1000, 2000];
 export const DEFAULT_BET = 500;
+export const CHIP_UNIT = 500;
+export const MAX_TABLE_BETS = 44;
 
 /** European single-zero wheel order (clockwise from 0). */
 export const EUROPEAN_WHEEL_ORDER = Object.freeze([
@@ -75,6 +104,14 @@ export function betSelectionLabel(selection) {
     const n = selection.targetNumber;
     return Number.isFinite(n) ? `NUMERO ${n}` : 'NUMERO';
   }
+  if (selection.betType === 'split') {
+    const nums = uniqSorted(selection.numbers);
+    return nums.length === 2 ? `CAVALLO ${nums.join('-')}` : 'CAVALLO';
+  }
+  if (selection.betType === 'corner') {
+    const nums = uniqSorted(selection.numbers);
+    return nums.length === 4 ? `CARRÉ ${nums.join('-')}` : 'CARRÉ';
+  }
   if (selection.betType === 'red') return 'ROSSO';
   if (selection.betType === 'black') return 'NERO';
   if (selection.betType === 'even') return 'PARI';
@@ -85,17 +122,211 @@ export function betSelectionLabel(selection) {
   return String(selection.betType);
 }
 
-export function buildSpinBody({ bet, betType, targetNumber, actionId }) {
-  const body = {
-    bet: Number(bet),
-    bet_type: String(betType),
-    action_id: String(actionId),
-    target_number: null,
-  };
+export function betKey(betType, targetNumber, numbers) {
+  if (betType === 'straight') return `straight:${Number(targetNumber)}`;
+  if (betType === 'split') return splitKey(numbers);
+  if (betType === 'corner') return cornerKey(numbers);
+  return String(betType || '');
+}
+
+export function rowKey(row) {
+  return betKey(row?.betType, row?.targetNumber, row?.numbers);
+}
+
+export function totalBet(bets) {
+  return (bets || []).reduce((sum, bet) => sum + Number(bet.amount || 0), 0);
+}
+
+export function isAllowedChip(amount) {
+  return BETS.includes(Number(amount));
+}
+
+export function canAddChip(bets, amount, balance) {
+  const chip = Number(amount);
+  if (!isAllowedChip(chip)) return false;
+  if (Number.isFinite(balance) && totalBet(bets) + chip > balance) return false;
+  return true;
+}
+
+function normalizePlacedBet(betType, targetNumber, numbers) {
   if (betType === 'straight') {
-    body.target_number = Number(targetNumber);
+    const n = Number(targetNumber);
+    if (!Number.isInteger(n) || n < 0 || n > 36) return { error: 'INVALID_STRAIGHT_TARGET' };
+    return { betType, targetNumber: n, numbers: null };
   }
-  return body;
+  if (betType === 'split') {
+    const nums = normalizeSplit(numbers);
+    if (!nums) return { error: 'INVALID_BET' };
+    return { betType, targetNumber: null, numbers: nums };
+  }
+  if (betType === 'corner') {
+    const nums = normalizeCorner(numbers);
+    if (!nums) return { error: 'INVALID_BET' };
+    return { betType, targetNumber: null, numbers: nums };
+  }
+  if (
+    betType === 'red' || betType === 'black' || betType === 'even' || betType === 'odd'
+    || betType === 'dozen_1' || betType === 'dozen_2' || betType === 'dozen_3'
+  ) {
+    return { betType, targetNumber: null, numbers: null };
+  }
+  return { error: 'INVALID_BET_TYPE' };
+}
+
+export function addChipToBets(bets, { betType, targetNumber, numbers, amount, balance }) {
+  const chip = Number(amount);
+  if (!isAllowedChip(chip)) {
+    return { bets: bets || [], error: 'INVALID_BET' };
+  }
+  const placed = normalizePlacedBet(betType, targetNumber, numbers);
+  if (placed.error) {
+    return { bets: bets || [], error: placed.error };
+  }
+  const current = Array.isArray(bets) ? bets.map((row) => ({
+    ...row,
+    numbers: Array.isArray(row.numbers) ? [...row.numbers] : row.numbers,
+  })) : [];
+  if (Number.isFinite(balance) && totalBet(current) + chip > balance) {
+    return { bets: current, error: 'INSUFFICIENT_CHIPS' };
+  }
+  const key = rowKey(placed);
+  if (current.length >= MAX_TABLE_BETS && !current.some((row) => rowKey(row) === key)) {
+    return { bets: current, error: 'INVALID_BET' };
+  }
+  const existing = current.find((row) => rowKey(row) === key);
+  if (existing) {
+    existing.amount = Number(existing.amount) + chip;
+    return { bets: current, error: null };
+  }
+  current.push({
+    betType: placed.betType,
+    targetNumber: placed.targetNumber,
+    numbers: placed.numbers,
+    amount: chip,
+  });
+  return { bets: current, error: null };
+}
+
+export function clearBets() {
+  return [];
+}
+
+export function spotChipClass(amount) {
+  const n = Number(amount);
+  if (n >= 2000) return 'spot-2000';
+  if (n >= 1000) return 'spot-1000';
+  return 'spot-500';
+}
+
+export function formatSpotLabel(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n % 1000 === 0) return `${n / 1000}k`;
+  if (n > 1000 && n % 500 === 0) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+export function findPlacedBet(bets, betType, targetNumber, numbers) {
+  const key = betKey(betType, targetNumber, numbers);
+  return (bets || []).find((row) => rowKey(row) === key) || null;
+}
+
+export function betsSummaryLabel(bets) {
+  const list = bets || [];
+  if (!list.length) return '—';
+  if (list.length === 1) {
+    return betSelectionLabel({
+      betType: list[0].betType,
+      targetNumber: list[0].targetNumber,
+    });
+  }
+  return `${list.length} PUNTATE`;
+}
+
+export function toApiBets(bets) {
+  return (bets || []).map((row) => {
+    const item = {
+      bet_type: String(row.betType),
+      amount: Number(row.amount),
+    };
+    if (row.betType === 'straight') {
+      item.target_number = Number(row.targetNumber);
+    }
+    if (row.betType === 'split' || row.betType === 'corner') {
+      item.numbers = uniqSorted(row.numbers);
+    }
+    return item;
+  });
+}
+
+export function buildSpinBody({ bets, bet, betType, targetNumber, actionId }) {
+  const list = Array.isArray(bets) && bets.length
+    ? toApiBets(bets)
+    : toApiBets([{
+      betType,
+      targetNumber: betType === 'straight' ? targetNumber : null,
+      amount: bet,
+    }]);
+  return {
+    action_id: String(actionId),
+    bets: list,
+  };
+}
+
+function previewBetWins(betType, targetNumber, numbers, number) {
+  const n = Number(number);
+  if (betType === 'straight') return n === Number(targetNumber);
+  if (betType === 'split' || betType === 'corner') {
+    return uniqSorted(numbers).includes(n);
+  }
+  if (betType === 'red') return pocketColor(n) === 'red';
+  if (betType === 'black') return pocketColor(n) === 'black';
+  if (betType === 'even') return n !== 0 && n % 2 === 0;
+  if (betType === 'odd') return n !== 0 && n % 2 === 1;
+  if (betType === 'dozen_1') return n >= 1 && n <= 12;
+  if (betType === 'dozen_2') return n >= 13 && n <= 24;
+  if (betType === 'dozen_3') return n >= 25 && n <= 36;
+  return false;
+}
+
+function previewMultiplier(betType) {
+  if (betType === 'straight') return 36;
+  if (betType === 'split') return 18;
+  if (betType === 'corner') return 9;
+  if (String(betType).startsWith('dozen')) return 3;
+  return 2;
+}
+
+/** Preview-only settlement mirror. Production never uses this. */
+export function previewEvaluateBets(bets, number) {
+  const rows = (bets || []).map((row) => {
+    const won = previewBetWins(row.betType, row.targetNumber, row.numbers, number);
+    const amount = Number(row.amount);
+    const base_credit = won ? amount * previewMultiplier(row.betType) : 0;
+    const out = {
+      bet_type: row.betType,
+      amount,
+      target_number: row.betType === 'straight' ? Number(row.targetNumber) : null,
+      won,
+      base_credit,
+    };
+    if (row.betType === 'split' || row.betType === 'corner') {
+      out.numbers = uniqSorted(row.numbers);
+    }
+    return out;
+  });
+  const total = totalBet(bets);
+  const base_credit_total = rows.reduce((sum, row) => sum + row.base_credit, 0);
+  const won = rows.some((row) => row.won);
+  return {
+    bets: rows,
+    total_bet: total,
+    base_credit_total,
+    won,
+    payout_base: base_credit_total,
+    final_credit: base_credit_total,
+    net_result: base_credit_total - total,
+  };
 }
 
 export function pushHistory(history, entry, { limit = 10 } = {}) {
@@ -118,10 +349,7 @@ function formatMult(value) {
 
 /** Breakdown rows from server payload only — no client math. */
 export function buildPayoutRows(payload, formatChips) {
-  if (!payload?.won) return [];
-  if (!(typeof payload.final_credit === 'number' && payload.final_credit > 0)) return [];
-
-  const rows = [];
+  if (!payload) return [];
   const safeFormat = (value) => {
     try {
       return formatChips(value);
@@ -129,39 +357,55 @@ export function buildPayoutRows(payload, formatChips) {
       return String(value);
     }
   };
-
-  if (typeof payload.payout_base === 'number') {
-    rows.push({ label: 'Vincita base', value: safeFormat(payload.payout_base) });
+  const rows = [];
+  const total = payload.total_bet ?? payload.bet;
+  if (typeof total === 'number') {
+    rows.push({ label: 'TOTALE PUNTATO', value: safeFormat(total) });
   }
 
-  if (payload.vip_applied && Number(payload.vip_multiplier) > 1) {
-    const pct = Math.round((Number(payload.vip_multiplier) - 1) * 100);
-    rows.push({
-      label: `VIP +${pct}%`,
-      value: typeof payload.after_vip === 'number' ? safeFormat(payload.after_vip) : '',
-    });
+  if (payload.won && typeof payload.final_credit === 'number' && payload.final_credit > 0) {
+    if (typeof payload.payout_base === 'number' || typeof payload.base_credit_total === 'number') {
+      rows.push({
+        label: 'Vincita base',
+        value: safeFormat(payload.base_credit_total ?? payload.payout_base),
+      });
+    }
+
+    if (payload.vip_applied && Number(payload.vip_multiplier) > 1) {
+      const pct = Math.round((Number(payload.vip_multiplier) - 1) * 100);
+      rows.push({
+        label: `VIP +${pct}%`,
+        value: typeof payload.after_vip === 'number' ? safeFormat(payload.after_vip) : '',
+      });
+    }
+
+    if (Number(payload.level_multiplier) > 1) {
+      rows.push({
+        label: `Livello ×${formatMult(payload.level_multiplier)}`,
+        value: typeof payload.after_level === 'number' ? safeFormat(payload.after_level) : '',
+      });
+    }
+
+    if (payload.daily_applied && Number(payload.daily_multiplier) > 1) {
+      rows.push({
+        label: `Bonus giornaliero ×${formatMult(payload.daily_multiplier)}`,
+        value: '',
+      });
+    }
+
+    rows.push({ label: 'VINCITA TOTALE', value: `+${safeFormat(payload.final_credit)}`, emphasis: true });
+    return rows;
   }
 
-  if (Number(payload.level_multiplier) > 1) {
-    rows.push({
-      label: `Livello ×${formatMult(payload.level_multiplier)}`,
-      value: typeof payload.after_level === 'number' ? safeFormat(payload.after_level) : '',
-    });
-  }
-
-  if (payload.daily_applied && Number(payload.daily_multiplier) > 1) {
-    rows.push({
-      label: `Bonus giornaliero ×${formatMult(payload.daily_multiplier)}`,
-      value: '',
-    });
-  }
-
-  rows.push({ label: 'TOTALE', value: `+${safeFormat(payload.final_credit)}`, emphasis: true });
+  rows.push({ label: 'VINCITA TOTALE', value: safeFormat(0), emphasis: true });
   return rows;
 }
 
 export function isStraightWinPayload(payload) {
-  return Boolean(payload?.won && payload?.bet_type === 'straight');
+  if (!payload?.won) return false;
+  if (payload.bet_type === 'straight') return true;
+  return Array.isArray(payload.bets)
+    && payload.bets.some((row) => row?.won && row?.bet_type === 'straight');
 }
 
 export function outcomeHeadline(payload) {
@@ -434,4 +678,83 @@ PREVIEW_SCENARIOS.spin_0_green = {
   won: false,
   final_credit: 0,
   balance_after: 9500,
+};
+
+PREVIEW_SCENARIOS.win_inside = {
+  action_id: 'preview-win-inside',
+  number: 17,
+  color: 'black',
+  parity: 'odd',
+  bet: 2000,
+  bet_type: 'straight',
+  target_number: 17,
+  total_bet: 2000,
+  base_credit_total: 31500,
+  net_result: 29500,
+  bets: [
+    { bet_type: 'straight', amount: 500, target_number: 17, won: true, base_credit: 18000 },
+    { bet_type: 'split', amount: 500, numbers: [17, 20], won: true, base_credit: 9000 },
+    { bet_type: 'corner', amount: 500, numbers: [17, 18, 20, 21], won: true, base_credit: 4500 },
+    { bet_type: 'red', amount: 500, target_number: null, won: false, base_credit: 0 },
+  ],
+  won: true,
+  payout_base: 31500,
+  after_vip: 31500,
+  after_level: 31500,
+  daily_applied: false,
+  daily_multiplier: 1,
+  final_credit: 31500,
+  vip_applied: false,
+  vip_level: 0,
+  vip_multiplier: 1,
+  level_multiplier: 1,
+  balance_before: 20000,
+  balance_after: 49500,
+  balance: 49500,
+  chips_delta: 29500,
+  history_multiplier: 1,
+  xp_awarded: 0,
+  streak_count: 0,
+  streak_multiplier: 1,
+  second_chance_applied: false,
+  replayed: false,
+};
+
+PREVIEW_SCENARIOS.win_multi = {
+  action_id: 'preview-win-multi',
+  number: 17,
+  color: 'black',
+  parity: 'odd',
+  bet: 2000,
+  bet_type: 'red',
+  target_number: null,
+  total_bet: 2000,
+  base_credit_total: 21000,
+  net_result: 19000,
+  bets: [
+    { bet_type: 'red', amount: 500, target_number: null, won: false, base_credit: 0 },
+    { bet_type: 'dozen_2', amount: 1000, target_number: null, won: true, base_credit: 3000 },
+    { bet_type: 'straight', amount: 500, target_number: 17, won: true, base_credit: 18000 },
+  ],
+  won: true,
+  payout_base: 21000,
+  after_vip: 21000,
+  after_level: 21000,
+  daily_applied: false,
+  daily_multiplier: 1,
+  final_credit: 21000,
+  vip_applied: false,
+  vip_level: 0,
+  vip_multiplier: 1,
+  level_multiplier: 1,
+  balance_before: 20000,
+  balance_after: 39000,
+  balance: 39000,
+  chips_delta: 19000,
+  history_multiplier: 1,
+  xp_awarded: 0,
+  streak_count: 0,
+  streak_multiplier: 1,
+  second_chance_applied: false,
+  replayed: false,
 };

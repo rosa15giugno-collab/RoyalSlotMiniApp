@@ -19,13 +19,27 @@ import {
   ERROR_COPY,
   EUROPEAN_WHEEL_ORDER,
   PREVIEW_SCENARIOS,
+  addChipToBets,
   betSelectionLabel,
+  betsSummaryLabel,
   buildPayoutRows,
   buildSpinBody,
+  canAddChip,
+  isValidCornerNumbers,
+  isValidSplitNumbers,
+  MAGNET,
+  numberCell,
   outcomeHeadline,
   outcomeKicker,
+  pickMagneticSnap,
   pocketColor,
+  previewEvaluateBets,
   pushHistory,
+  resolveInsideSpot,
+  resolveZeroSpot,
+  totalBet,
+  aimPreviewLabel,
+  buildMagneticSnaps,
 } from '../roulette/layout.js';
 import {
   Scene,
@@ -80,6 +94,7 @@ function assert(cond, message) {
 
 const app = readFileSync(join(root, 'roulette/app.js'), 'utf8');
 const html = readFileSync(join(root, 'roulette/index.html'), 'utf8');
+const css = readFileSync(join(root, 'roulette/style.css'), 'utf8');
 
 record('stakes Mini App 500/1000/2000', () => {
   assert(JSON.stringify(BETS) === JSON.stringify([500, 1000, 2000]), 'BETS');
@@ -97,9 +112,25 @@ record('selection labels', () => {
   assert(betSelectionLabel({ betType: 'straight', targetNumber: 17 }) === 'NUMERO 17', 'straight');
 });
 
-record('spin body target_number null for non-straight', () => {
-  assert(buildSpinBody({ bet: 500, betType: 'red', targetNumber: 17, actionId: 'a' }).target_number === null, 'red');
-  assert(buildSpinBody({ bet: 500, betType: 'straight', targetNumber: 17, actionId: 'a' }).target_number === 17, 'straight');
+record('spin body uses bets array', () => {
+  const red = buildSpinBody({ bet: 500, betType: 'red', targetNumber: 17, actionId: 'a' });
+  assert(red.action_id === 'a', 'action');
+  assert(red.bets.length === 1, 'one bet');
+  assert(red.bets[0].bet_type === 'red', 'red type');
+  assert(red.bets[0].amount === 500, 'amount');
+  assert(red.bets[0].target_number === undefined, 'red no target');
+  const straight = buildSpinBody({ bet: 500, betType: 'straight', targetNumber: 17, actionId: 'b' });
+  assert(straight.bets[0].target_number === 17, 'straight target');
+  const multi = buildSpinBody({
+    actionId: 'c',
+    bets: [
+      { betType: 'red', amount: 500, targetNumber: null },
+      { betType: 'dozen_2', amount: 1000, targetNumber: null },
+      { betType: 'straight', amount: 500, targetNumber: 17 },
+    ],
+  });
+  assert(multi.bets.length === 3, 'three');
+  assert(multi.bets[2].target_number === 17, 'n17');
 });
 
 record('pocket colors red/black/zero', () => {
@@ -124,7 +155,11 @@ record('GIRA → pending action + SPINNING after payload', () => {
 
 record('animation → RESULT', () => {
   assert(sceneAfterAnimation() === Scene.RESULT, 'result scene');
+  assert(app.includes('clearBettingPointerUi'), 'pointer ui cleanup');
   assert(app.includes('goResult(payload)'), 'go result');
+  assert(html.includes('id="ghostChip"'), 'ghost html');
+  assert(html.indexOf('id="ghostChip"') > html.indexOf('id="sceneBetting"'), 'ghost in betting tree');
+  assert(html.indexOf('id="ghostChip"') < html.indexOf('id="sceneSpinning"'), 'ghost before spinning');
 });
 
 record('WIN / LOSE headlines', () => {
@@ -505,15 +540,18 @@ await recordAsync('RESULT→BETTING stopActiveAudio clears residual SFX', async 
   }
 });
 
-record('NUOVA PUNTATA reset keeps amount clears bet', () => {
+record('NUOVA PUNTATA reset keeps amount clears bets', () => {
   const patch = bettingResetPatch();
   assert(patch.scene === Scene.BETTING, 'scene');
+  assert(Array.isArray(patch.bets) && patch.bets.length === 0, 'bets');
   assert(patch.betType === null, 'betType');
   assert(patch.targetNumber === null, 'target');
   assert(patch.pending === null, 'pending');
   assert(patch.lastPayload === null, 'payload');
   assert(app.includes('goBettingFresh'), 'handler');
   assert(app.includes('bettingResetPatch'), 'uses patch');
+  assert(app.includes('clearPlacedBets'), 'annulla');
+  assert(html.includes('ANNULLA PUNTATE'), 'annulla label');
 });
 
 record('action_id reset only after RESULT', () => {
@@ -556,10 +594,13 @@ record('history limit 10', () => {
   assert(hist.length === 10, 'cap');
 });
 
-record('breakdown VIP chain + lose empty', () => {
+record('breakdown VIP chain + lose still shows totals', () => {
   const rows = buildPayoutRows(PREVIEW_SCENARIOS.win_full_chain, String);
-  assert(rows.some((r) => r.label === 'TOTALE'), 'total');
-  assert(buildPayoutRows(PREVIEW_SCENARIOS.lose, String).length === 0, 'lose');
+  assert(rows.some((r) => r.label === 'VINCITA TOTALE'), 'win total');
+  assert(rows.some((r) => r.label === 'TOTALE PUNTATO'), 'staked');
+  const lose = buildPayoutRows(PREVIEW_SCENARIOS.lose, String);
+  assert(lose.some((r) => r.label === 'TOTALE PUNTATO'), 'lose stake');
+  assert(lose.some((r) => r.label === 'VINCITA TOTALE'), 'lose win total');
 });
 
 record('preview spin scenarios present', () => {
@@ -573,6 +614,174 @@ record('3 scene panels in HTML', () => {
   assert(html.includes('sceneSpinning'), 'spinning');
   assert(html.includes('sceneResult'), 'result');
   assert(html.includes('NUOVA PUNTATA'), 'cta');
+});
+
+record('multi-bet merge same position', () => {
+  let placed = [];
+  placed = addChipToBets(placed, { betType: 'straight', targetNumber: 17, amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'straight', targetNumber: 17, amount: 1000, balance: 20000 }).bets;
+  assert(placed.length === 1, 'one stack');
+  assert(placed[0].amount === 1500, '1500');
+  assert(totalBet(placed) === 1500, 'total');
+});
+
+record('multi-bet three positions payload', () => {
+  let placed = [];
+  placed = addChipToBets(placed, { betType: 'red', amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'dozen_2', amount: 1000, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'straight', targetNumber: 17, amount: 500, balance: 20000 }).bets;
+  assert(totalBet(placed) === 2000, 'total 2000');
+  assert(betsSummaryLabel(placed) === '3 PUNTATE', 'summary');
+  const body = buildSpinBody({ bets: placed, actionId: 'multi-1' });
+  assert(body.bets.length === 3, '3 api bets');
+  assert(body.bets[0].bet_type === 'red', 'red');
+  assert(body.bets[1].amount === 1000, 'dozen amt');
+  assert(body.bets[2].target_number === 17, 'n17');
+});
+
+record('cannot add chip over balance', () => {
+  const placed = [{ betType: 'red', targetNumber: null, amount: 2000 }];
+  assert(canAddChip(placed, 500, 2000) === false, 'blocked');
+  const result = addChipToBets(placed, { betType: 'black', amount: 500, balance: 2000 });
+  assert(result.error === 'INSUFFICIENT_CHIPS', 'error');
+  assert(result.bets.length === 1, 'unchanged');
+});
+
+record('preview evaluate 3 bets on 17', () => {
+  const evaluated = previewEvaluateBets([
+    { betType: 'red', targetNumber: null, amount: 500 },
+    { betType: 'dozen_2', targetNumber: null, amount: 1000 },
+    { betType: 'straight', targetNumber: 17, amount: 500 },
+  ], 17);
+  assert(evaluated.total_bet === 2000, 'stake');
+  assert(evaluated.bets[0].won === false, 'red lose on black');
+  assert(evaluated.bets[1].won === true, 'dozen');
+  assert(evaluated.bets[2].won === true, 'straight');
+  assert(evaluated.base_credit_total === 21000, '21000');
+});
+
+record('multi-bet audio straight still fanfare', () => {
+  const plan = resolveOutcomeAudioPlan(PREVIEW_SCENARIOS.win_multi);
+  assert(plan.climax === 'straight-win', 'straight in mix');
+});
+
+record('app posts bets array not single bet_type only', () => {
+  assert(app.includes('buildSpinBody({'), 'builder');
+  assert(app.includes('bets: pending.bets'), 'pending bets');
+  assert(app.includes('placeBet'), 'place');
+  assert(app.includes('clearPlacedBets'), 'clear');
+});
+
+record('split geometry adjacent vs not', () => {
+  assert(isValidSplitNumbers([17, 20]) === true, 'vertical 17-20');
+  assert(isValidSplitNumbers([16, 17]) === true, 'horizontal 16-17');
+  assert(isValidSplitNumbers([17, 19]) === false, 'not adjacent');
+  assert(isValidSplitNumbers([0, 1]) === true, '0-1');
+  assert(isValidSplitNumbers([0, 2]) === true, '0-2');
+  assert(isValidSplitNumbers([0, 3]) === true, '0-3');
+  assert(isValidSplitNumbers([0, 4]) === false, '0-4');
+});
+
+record('corner geometry 2x2 vs zero/arbitrary', () => {
+  assert(isValidCornerNumbers([17, 18, 20, 21]) === true, '2x2');
+  assert(isValidCornerNumbers([21, 17, 20, 18]) === true, 'order');
+  assert(isValidCornerNumbers([1, 2, 3, 4]) === false, 'not 2x2');
+  assert(isValidCornerNumbers([0, 1, 2, 3]) === false, 'zero');
+});
+
+record('hit testing center/edge/corner', () => {
+  const straight = resolveInsideSpot({ row: 5, col: 1, localX: 0.5, localY: 0.5, n: 17 });
+  assert(straight.betType === 'straight' && straight.targetNumber === 17, 'center');
+  const splitV = resolveInsideSpot({ row: 5, col: 1, localX: 0.5, localY: 0.97, n: 17 });
+  assert(splitV.betType === 'split' && splitV.numbers.join(',') === '17,20', 'bottom split');
+  const splitH = resolveInsideSpot({ row: 5, col: 1, localX: 0.97, localY: 0.5, n: 17 });
+  assert(splitH.betType === 'split' && splitH.numbers.join(',') === '17,18', 'right split');
+  const corner = resolveInsideSpot({ row: 5, col: 1, localX: 0.97, localY: 0.97, n: 17 });
+  assert(corner.betType === 'corner' && corner.numbers.join(',') === '17,18,20,21', 'corner');
+  const zeroSplit = resolveZeroSpot(0.5, 0.9);
+  assert(zeroSplit.betType === 'split' && zeroSplit.numbers.join(',') === '0,2', 'zero mid');
+  const zeroStraight = resolveZeroSpot(0.5, 0.4);
+  assert(zeroStraight.betType === 'straight' && zeroStraight.targetNumber === 0, 'zero body');
+});
+
+record('magnetic snap prefers straight on small miss', () => {
+  const w = 40;
+  const h = 28;
+  const rects = {};
+  rects[0] = { left: 0, top: 0, width: 120, height: 26 };
+  for (let n = 1; n <= 36; n += 1) {
+    const cell = numberCell(n);
+    rects[n] = { left: cell.col * w, top: 26 + cell.row * h, width: w, height: h };
+  }
+  const snaps = buildMagneticSnaps(rects);
+  const c17 = { x: 40 + 20, y: 26 + 5 * 28 + 14 };
+  const pick = (x, y) => pickMagneticSnap(x, y, snaps, MAGNET, rects);
+  assert(MAGNET.splitPx === 6, 'split px');
+  assert(MAGNET.cornerPx === 11, 'corner px');
+  const mid = pick(c17.x, c17.y);
+  assert(mid.betType === 'straight' && mid.targetNumber === 17, 'center 17');
+  const left = pick(c17.x - 8, c17.y);
+  assert(left.betType === 'straight' && left.targetNumber === 17, 'slight left');
+  const right = pick(c17.x + 8, c17.y);
+  assert(right.betType === 'straight' && right.targetNumber === 17, 'slight right');
+  const up = pick(c17.x, c17.y - 8);
+  assert(up.betType === 'straight' && up.targetNumber === 17, 'slight above');
+  const down = pick(c17.x, c17.y + 8);
+  assert(down.betType === 'straight' && down.targetNumber === 17, 'slight below');
+  const nearLine = pick(c17.x, c17.y + 12);
+  assert(nearLine.betType === 'split' && nearLine.numbers.join(',') === '17,20', '2px from 17/20');
+  const split = pick(c17.x, c17.y + 14);
+  assert(split.betType === 'split' && split.numbers.join(',') === '17,20', 'near 17/20 line');
+  const corner = pick(c17.x + 20, c17.y + 14);
+  assert(corner.betType === 'corner' && corner.numbers.join(',') === '17,18,20,21', '17/18/20/21');
+  assert(aimPreviewLabel(mid) === 'NUMERO 17', 'label straight');
+  assert(aimPreviewLabel(split) === 'SPLIT 17–20', 'label split');
+  assert(aimPreviewLabel(corner) === 'CORNER 17·18·20·21', 'label corner');
+});
+
+record('split/corner payload and stack', () => {
+  let placed = [];
+  placed = addChipToBets(placed, { betType: 'split', numbers: [17, 20], amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'split', numbers: [20, 17], amount: 1000, balance: 20000 }).bets;
+  assert(placed.length === 1, 'one stack');
+  assert(placed[0].amount === 1500, '1500');
+  const body = buildSpinBody({ bets: placed, actionId: 'split-1' });
+  assert(body.bets[0].bet_type === 'split', 'type');
+  assert(body.bets[0].numbers.join(',') === '17,20', 'nums');
+  placed = addChipToBets(placed, { betType: 'corner', numbers: [21, 18, 17, 20], amount: 500, balance: 20000 }).bets;
+  assert(placed.length === 2, 'two positions');
+  const mixed = previewEvaluateBets(placed, 17);
+  assert(mixed.bets[0].base_credit === 27000, 'split 1500x18');
+  assert(mixed.bets[1].base_credit === 4500, 'corner 500x9');
+});
+
+record('drag wiring tap still present', () => {
+  assert(app.includes('pointerdown'), 'pointerdown');
+  assert(app.includes('pointermove'), 'pointermove');
+  assert(app.includes('pointerup'), 'pointerup');
+  assert(app.includes('pointercancel'), 'pointercancel');
+  assert(app.includes('ghostChip'), 'ghost');
+  assert(app.includes('GHOST_LIFT'), 'ghost lift');
+  assert(app.includes('is-chip-dragging'), 'no scroll class');
+  assert(app.includes('bindChipDrag'), 'chip drag');
+  assert(app.includes('resolveDrop'), 'drop');
+  assert(app.includes('showAim'), 'aim preview');
+  assert(app.includes('pickMagneticSnap'), 'magnet');
+  assert(html.includes('tokenLayer'), 'tokens');
+  assert(html.includes('ghostChip'), 'ghost html');
+  assert(html.includes('aimHint'), 'aim hint');
+  assert(app.includes('selectOutside'), 'tap outside');
+  assert(app.includes('ANNULLA') || html.includes('ANNULLA PUNTATE'), 'clear');
+  assert(app.includes('clearBettingPointerUi'), 'cleanup fn');
+  assert(css.includes('.placed-chip.spot-500::after') || css.includes('.placed-chip.spot-2000::after'), 'no result chip leak');
+  assert(/\.ghost-chip(?:\.chip)?\s*,\s*\.ghost-chip\.chip/.test(css) || css.includes('.ghost-chip.chip'), 'ghost stays fixed');
+});
+
+record('no street/sixline/trio/basket in live app', () => {
+  assert(!app.includes('sixline'), 'no sixline');
+  assert(!app.includes('trio-0'), 'no trio');
+  assert(!app.includes('basket-0'), 'no basket');
+  assert(!html.includes('street'), 'no street html');
 });
 
 const failed = results.filter((r) => !r.ok);

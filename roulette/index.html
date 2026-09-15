@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=35">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -47,8 +47,8 @@
         </div>
         <div class="selection__divider" aria-hidden="true"></div>
         <div class="selection__cell">
-          <span class="selection__hint">IMPORTO</span>
-          <strong class="selection__value" id="betAmountLabel">500</strong>
+          <span class="selection__hint">TOTALE</span>
+          <strong class="selection__value" id="betAmountLabel">0</strong>
         </div>
         <div class="selection__divider" aria-hidden="true"></div>
         <div class="selection__cell selection__cell--saldo">
@@ -63,6 +63,9 @@
       </section>
 
       <section class="board" aria-label="Tappeto puntate">
+        <div class="aim-hint" id="aimHint" hidden>
+          <span id="aimHintLabel"></span>
+        </div>
         <div class="board__table">
           <div class="board__cloth">
             <div class="board__nap" aria-hidden="true"></div>
@@ -72,15 +75,19 @@
               <div class="board__outside" id="outsideBets" role="group" aria-label="Puntate esterne"></div>
             </div>
             <div class="board__sheen" aria-hidden="true"></div>
+            <div class="board__tokens" id="tokenLayer" aria-hidden="true"></div>
+            <div class="aim-mark" id="aimMark" hidden aria-hidden="true"></div>
           </div>
         </div>
       </section>
 
       <footer class="dock dock--betting">
         <div class="chips" id="chipPresets" role="group" aria-label="Fiches"></div>
+        <button type="button" class="btn btn--ghost" id="clearBetsBtn">ANNULLA PUNTATE</button>
         <button type="button" class="btn btn--spin" id="spinBtn">GIRA LA ROULETTE</button>
         <p class="error" id="errorBox" hidden></p>
       </footer>
+      <div class="ghost-chip" id="ghostChip" hidden aria-hidden="true"></div>
     </section>
 
     <!-- ========== SCENA SPINNING ========== -->
@@ -107,10 +114,11 @@
         </div>
         <div class="spin-hud__divider" aria-hidden="true"></div>
         <div class="spin-hud__cell">
-          <span class="spin-hud__hint">IMPORTO</span>
-          <strong class="spin-hud__value" id="spinAmountLabel">500</strong>
+          <span class="spin-hud__hint">TOTALE</span>
+          <strong class="spin-hud__value" id="spinAmountLabel">0</strong>
         </div>
       </div>
+      <div class="placed-strip" id="spinBetsRow" hidden></div>
     </section>
 
     <!-- ========== SCENA RESULT ========== -->
@@ -124,6 +132,7 @@
       <div class="result-card" id="outcomePanel">
         <p class="result-card__title" id="outcomeTitle" aria-live="polite"></p>
         <p class="result-card__sub" id="outcomeSub"></p>
+        <div class="placed-strip placed-strip--result" id="resultBetsRow" hidden></div>
         <div class="breakdown" id="breakdown" hidden></div>
       </div>
 
@@ -153,6 +162,6 @@
     </section>
   </div>
 
-  <script type="module" src="app.js?v=30"></script>
+  <script type="module" src="app.js?v=37"></script>
 </body>
 </html>

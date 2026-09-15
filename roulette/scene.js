@@ -27,10 +27,11 @@ export function sceneAfterAnimation() {
   return Scene.RESULT;
 }
 
-/** After NUOVA PUNTATA — keep bet amount, clear selection + pending + result. */
+/** After NUOVA PUNTATA — keep chip denomination, clear table bets + pending + result. */
 export function bettingResetPatch() {
   return {
     scene: Scene.BETTING,
+    bets: [],
     betType: null,
     targetNumber: null,
     pending: null,

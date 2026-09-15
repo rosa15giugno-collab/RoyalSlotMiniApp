@@ -88,7 +88,10 @@ try {
 }
 
 export function isStraightWin(payload) {
-  return Boolean(payload?.won && payload?.bet_type === 'straight');
+  if (!payload?.won) return false;
+  if (payload.bet_type === 'straight') return true;
+  return Array.isArray(payload.bets)
+    && payload.bets.some((row) => row?.won && row?.bet_type === 'straight');
 }
 
 export function hasBonusAccent(payload) {
