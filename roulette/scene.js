@@ -27,6 +27,11 @@ export function sceneAfterAnimation() {
   return Scene.RESULT;
 }
 
+/** Winning marks (is-hit / is-miss / result glow) only after the ball has settled. */
+export function canRevealWinningMarks(scene) {
+  return scene === Scene.RESULT;
+}
+
 /** After NUOVA PUNTATA — keep chip denomination, clear table bets + pending + result. */
 export function bettingResetPatch() {
   return {

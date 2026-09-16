@@ -13,15 +13,17 @@ import { RouletteAudio } from './audio.js?v=30';
 import {
   Scene,
   bettingResetPatch,
+  canRevealWinningMarks,
   canStartSpin,
   sceneAfterAnimation,
   sceneAfterPayload,
-} from './scene.js';
+} from './scene.js?v=2';
 import {
   BETS,
   DEFAULT_BET,
   DOZEN_BETS,
   ERROR_COPY,
+  MAX_TOTAL_STAKE_PER_SPIN,
   OUTSIDE_BETS,
   PREVIEW_SCENARIOS,
   addChipToBets,
@@ -50,7 +52,7 @@ import {
   rowKey,
   spotChipClass,
   totalBet,
-} from './layout.js?v=12';
+} from './layout.js?v=16';
 
 const telegram = new TelegramBridge();
 const PREVIEW = Boolean(window.__ROULETTE_PREVIEW__);
@@ -97,6 +99,7 @@ const dom = {
   resultNumber: document.getElementById('resultNumber'),
   resultColorLabel: document.getElementById('resultColorLabel'),
   resultKicker: document.getElementById('resultKicker'),
+  resultZeroBonus: document.getElementById('resultZeroBonus'),
   outsideBets: document.getElementById('outsideBets'),
   dozenBets: document.getElementById('dozenBets'),
   numberGrid: document.getElementById('numberGrid'),
@@ -203,12 +206,13 @@ function selectionLabel() {
 function paintSelection() {
   const label = selectionLabel();
   const total = totalBet(activeBets());
+  const cap = `${formatChips(total)} / ${formatChips(MAX_TOTAL_STAKE_PER_SPIN)}`;
   dom.betTypeLabel.textContent = label;
   dom.betTypeLabel.classList.toggle('is-active', hasSelection());
-  dom.betAmountLabel.textContent = formatChips(total);
+  dom.betAmountLabel.textContent = cap;
   if (dom.spinBetLabel) {
     dom.spinBetLabel.textContent = label;
-    dom.spinAmountLabel.textContent = formatChips(total);
+    dom.spinAmountLabel.textContent = cap;
   }
 }
 
@@ -485,7 +489,8 @@ function paintChrome() {
     btn.classList.toggle('is-selected', Number(btn.dataset.bet) === state.bet);
   });
   const placed = activeBets();
-  const showResultMarks = Boolean(state.lastPayload?.bets) && (state.scene === Scene.RESULT || state.scene === Scene.SPINNING);
+  const showResultMarks = canRevealWinningMarks(state.scene) && Boolean(state.lastPayload?.bets);
+  const resultBets = showResultMarks ? state.lastPayload.bets : null;
   dom.outsideBets?.querySelectorAll('button').forEach((btn) => {
     btn.disabled = flags.bets;
     const type = btn.dataset.type;
@@ -509,9 +514,9 @@ function paintChrome() {
     btn.classList.remove('is-selected', 'is-covered', 'is-hot', 'is-straight-aim', ...SPOT_CHIP_CLASSES);
     btn.removeAttribute('data-spot-label');
   });
-  paintTokenLayer(placed, showResultMarks ? state.lastPayload?.bets : null);
-  paintPlacedStrip(dom.spinBetsRow, placed, state.lastPayload?.bets);
-  paintPlacedStrip(dom.resultBetsRow, placed, state.lastPayload?.bets);
+  paintTokenLayer(placed, resultBets);
+  paintPlacedStrip(dom.spinBetsRow, placed, resultBets);
+  paintPlacedStrip(dom.resultBetsRow, placed, resultBets);
   paintBalance();
   paintSelection();
   paintHistory();
@@ -531,6 +536,10 @@ function clearOutcome() {
     dom.resultKicker.hidden = true;
     dom.resultKicker.textContent = '';
   }
+  if (dom.resultZeroBonus) {
+    dom.resultZeroBonus.hidden = true;
+    dom.resultZeroBonus.textContent = '';
+  }
 }
 
 function renderOutcome(payload) {
@@ -548,6 +557,15 @@ function renderOutcome(payload) {
     const kicker = outcomeKicker(payload);
     dom.resultKicker.textContent = kicker;
     dom.resultKicker.hidden = !kicker;
+  }
+  if (dom.resultZeroBonus) {
+    if (Number(payload.zero_bonus) > 0) {
+      dom.resultZeroBonus.hidden = false;
+      dom.resultZeroBonus.textContent = 'ZERO BONUS';
+    } else {
+      dom.resultZeroBonus.hidden = true;
+      dom.resultZeroBonus.textContent = '';
+    }
   }
 
   dom.outcomePanel.className = `result-card ${payload.won ? 'is-win' : 'is-lose'}${straightWin ? ' is-straight-win' : ''}`;
@@ -996,7 +1014,6 @@ function goResult(payload) {
 }
 
 async function applyServerPayload(payload) {
-  state.lastPayload = payload;
   await playSpinAnimation(payload);
   goResult(payload);
 }

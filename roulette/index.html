@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="stylesheet" href="style.css?v=37">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -47,7 +47,7 @@
         </div>
         <div class="selection__divider" aria-hidden="true"></div>
         <div class="selection__cell">
-          <span class="selection__hint">TOTALE</span>
+          <span class="selection__hint">PUNTATA TOTALE</span>
           <strong class="selection__value" id="betAmountLabel">0</strong>
         </div>
         <div class="selection__divider" aria-hidden="true"></div>
@@ -114,7 +114,7 @@
         </div>
         <div class="spin-hud__divider" aria-hidden="true"></div>
         <div class="spin-hud__cell">
-          <span class="spin-hud__hint">TOTALE</span>
+          <span class="spin-hud__hint">PUNTATA TOTALE</span>
           <strong class="spin-hud__value" id="spinAmountLabel">0</strong>
         </div>
       </div>
@@ -127,6 +127,7 @@
       <div class="result-hero" id="resultHero">
         <p class="result-hero__label" id="resultColorLabel"></p>
         <p class="result-hero__number" id="resultNumber">—</p>
+        <p class="result-hero__zero" id="resultZeroBonus" hidden></p>
       </div>
 
       <div class="result-card" id="outcomePanel">
@@ -162,6 +163,6 @@
     </section>
   </div>
 
-  <script type="module" src="app.js?v=37"></script>
+  <script type="module" src="app.js?v=41"></script>
 </body>
 </html>

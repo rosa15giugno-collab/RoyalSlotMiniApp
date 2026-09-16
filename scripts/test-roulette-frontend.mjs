@@ -38,12 +38,18 @@ import {
   resolveInsideSpot,
   resolveZeroSpot,
   totalBet,
+  validateBetSlip,
   aimPreviewLabel,
   buildMagneticSnaps,
+  coveredNumberSet,
+  MAX_COVERED_NUMBERS_PER_SPIN,
+  MAX_STRAIGHT_NUMBERS_PER_SPIN,
+  MAX_TOTAL_STAKE_PER_SPIN,
 } from '../roulette/layout.js';
 import {
   Scene,
   bettingResetPatch,
+  canRevealWinningMarks,
   canStartSpin,
   isBusyScene,
   sceneAfterAnimation,
@@ -596,11 +602,23 @@ record('history limit 10', () => {
 
 record('breakdown VIP chain + lose still shows totals', () => {
   const rows = buildPayoutRows(PREVIEW_SCENARIOS.win_full_chain, String);
-  assert(rows.some((r) => r.label === 'VINCITA TOTALE'), 'win total');
-  assert(rows.some((r) => r.label === 'TOTALE PUNTATO'), 'staked');
+  assert(rows.some((r) => r.label === 'TOTALE'), 'win total');
+  assert(rows.some((r) => r.label === 'Puntata totale'), 'staked');
+  assert(rows.some((r) => r.label === 'Vincita Roulette'), 'standard');
+  assert(rows.some((r) => r.label === 'BONUS CASINÒ'), 'capped bonus');
+  assert(!rows.some((r) => r.label === 'ZERO BONUS'), 'no zero row');
   const lose = buildPayoutRows(PREVIEW_SCENARIOS.lose, String);
-  assert(lose.some((r) => r.label === 'TOTALE PUNTATO'), 'lose stake');
-  assert(lose.some((r) => r.label === 'VINCITA TOTALE'), 'lose win total');
+  assert(lose.some((r) => r.label === 'Puntata totale'), 'lose stake');
+  assert(lose.some((r) => r.label === 'TOTALE'), 'lose win total');
+  assert(!lose.some((r) => r.label === 'BONUS CASINÒ'), 'no bonus on lose');
+});
+
+record('zero bonus copy from payload only', () => {
+  assert(outcomeHeadline(PREVIEW_SCENARIOS.win_zero) === 'ZERO BONUS', 'headline');
+  assert(outcomeKicker(PREVIEW_SCENARIOS.win_zero).includes('250'), 'kicker chips');
+  const rows = buildPayoutRows(PREVIEW_SCENARIOS.win_zero, String);
+  assert(rows.some((r) => r.label === 'ZERO BONUS'), 'zero row');
+  assert(html.includes('resultZeroBonus'), 'hero slot');
 });
 
 record('preview spin scenarios present', () => {
@@ -782,6 +800,148 @@ record('no street/sixline/trio/basket in live app', () => {
   assert(!app.includes('trio-0'), 'no trio');
   assert(!app.includes('basket-0'), 'no basket');
   assert(!html.includes('street'), 'no street html');
+});
+
+record('winning marks only on RESULT', () => {
+  assert(canRevealWinningMarks(Scene.BETTING) === false, 'betting');
+  assert(canRevealWinningMarks(Scene.SPINNING) === false, 'spinning');
+  assert(canRevealWinningMarks(Scene.RESULT) === true, 'result');
+  const apply = app.slice(app.indexOf('async function applyServerPayload'));
+  const beforeSpin = apply.split('await playSpinAnimation')[0];
+  assert(!beforeSpin.includes('state.lastPayload = payload'), 'payload hidden until reveal');
+  assert(app.includes('canRevealWinningMarks(state.scene)'), 'paint uses helper');
+});
+
+record('complementary red+black even+odd blocked', () => {
+  let placed = addChipToBets([], { betType: 'red', amount: 500, balance: 20000 }).bets;
+  const black = addChipToBets(placed, { betType: 'black', amount: 500, balance: 20000 });
+  assert(black.error === 'COMPLEMENTARY_COLOR', 'red+black');
+  assert(black.bets.length === 1, 'red kept');
+  placed = addChipToBets([], { betType: 'even', amount: 500, balance: 20000 }).bets;
+  const odd = addChipToBets(placed, { betType: 'odd', amount: 500, balance: 20000 });
+  assert(odd.error === 'COMPLEMENTARY_PARITY', 'even+odd');
+  assert(ERROR_COPY.COMPLEMENTARY_COLOR.includes('Rosso e Nero'), 'copy color');
+  assert(ERROR_COPY.COMPLEMENTARY_PARITY.includes('Pari e Dispari'), 'copy parity');
+});
+
+record('low+high blocked at slip layer', () => {
+  assert(
+    validateBetSlip([
+      { betType: 'low', amount: 500 },
+      { betType: 'high', amount: 500 },
+    ]) === 'COMPLEMENTARY_RANGE',
+    'range',
+  );
+});
+
+record('dozens 1 and 2 ok, 3 rejected', () => {
+  let placed = addChipToBets([], { betType: 'dozen_1', amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'dozen_2', amount: 500, balance: 20000 }).bets;
+  assert(placed.length === 2, 'two dozens');
+  const third = addChipToBets(placed, { betType: 'dozen_3', amount: 500, balance: 20000 });
+  assert(third.error === 'MAX_DOZENS', 'third blocked');
+  assert(third.bets.length === 2, 'unchanged');
+});
+
+record('12 straight ok, 13 rejected, duplicates merge', () => {
+  let placed = [];
+  for (let n = 0; n < MAX_STRAIGHT_NUMBERS_PER_SPIN; n += 1) {
+    placed = addChipToBets(placed, { betType: 'straight', targetNumber: n, amount: 500, balance: 20000 }).bets;
+  }
+  assert(placed.length === 12, '12 numbers');
+  const extra = addChipToBets(placed, { betType: 'straight', targetNumber: 12, amount: 500, balance: 20000 });
+  assert(extra.error === 'MAX_STRAIGHT', '13th number');
+  const stack = addChipToBets(placed, { betType: 'straight', targetNumber: 0, amount: 500, balance: 20000 });
+  assert(stack.error === null, 'stack same number');
+  assert(stack.bets[0].amount === 1000, '0 stacked');
+});
+
+record('total stake cap', () => {
+  let placed = [];
+  for (let n = 0; n < 5; n += 1) {
+    placed = addChipToBets(placed, { betType: 'straight', targetNumber: n, amount: 2000, balance: 50000 }).bets;
+  }
+  assert(totalBet(placed) === 10000, 'at cap');
+  const over = addChipToBets(placed, { betType: 'straight', targetNumber: 5, amount: 500, balance: 50000 });
+  assert(over.error === 'MAX_TOTAL_STAKE', 'over cap');
+  assert(canAddChip(placed, 500, 50000) === false, 'canAddChip cap');
+  assert(MAX_TOTAL_STAKE_PER_SPIN === 10000, 'medium default');
+});
+
+record('stake cap copy in betting chrome', () => {
+  assert(html.includes('PUNTATA TOTALE'), 'label');
+  assert(MAX_TOTAL_STAKE_PER_SPIN === 10000, 'cap 10000');
+  assert(MAX_COVERED_NUMBERS_PER_SPIN === 24, 'coverage 24');
+});
+
+record('two dozens ok if coverage is 24', () => {
+  let placed = addChipToBets([], { betType: 'dozen_1', amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'dozen_2', amount: 500, balance: 20000 }).bets;
+  assert(placed.length === 2, 'two dozens');
+  assert(coveredNumberSet(placed).size === 24, 'union 24');
+  assert(validateBetSlip(placed) === null, 'allowed');
+});
+
+record('two dozens plus already-covered straight ok', () => {
+  const slip = [
+    { betType: 'dozen_1', amount: 500 },
+    { betType: 'dozen_2', amount: 500 },
+    { betType: 'straight', targetNumber: 5, amount: 500 },
+  ];
+  assert(coveredNumberSet(slip).size === 24, 'still 24');
+  assert(validateBetSlip(slip) === null, 'allowed');
+  let placed = addChipToBets([], { betType: 'dozen_1', amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'dozen_2', amount: 500, balance: 20000 }).bets;
+  const extra = addChipToBets(placed, { betType: 'straight', targetNumber: 5, amount: 500, balance: 20000 });
+  assert(extra.error === null, 'covered straight');
+});
+
+record('two dozens plus external straight rejected', () => {
+  let placed = addChipToBets([], { betType: 'dozen_1', amount: 500, balance: 20000 }).bets;
+  placed = addChipToBets(placed, { betType: 'dozen_2', amount: 500, balance: 20000 }).bets;
+  const extra = addChipToBets(placed, { betType: 'straight', targetNumber: 25, amount: 500, balance: 20000 });
+  assert(extra.error === 'MAX_COVERED', 'external');
+  assert(extra.bets.length === 2, 'unchanged');
+});
+
+record('dozen1+dozen2+12 straights of dozen3 rejected', () => {
+  const slip = [
+    { betType: 'dozen_1', amount: 500 },
+    { betType: 'dozen_2', amount: 500 },
+    ...Array.from({ length: 12 }, (_, i) => ({ betType: 'straight', targetNumber: 25 + i, amount: 500 })),
+  ];
+  assert(coveredNumberSet(slip).size === 36, 'full 1-36');
+  assert(validateBetSlip(slip) === 'MAX_COVERED', 'blocked');
+});
+
+record('red plus extra numbers over 24 rejected', () => {
+  const slip = [
+    { betType: 'red', amount: 500 },
+    ...[2, 4, 6, 8, 10, 11, 13].map((n) => ({ betType: 'straight', targetNumber: n, amount: 500 })),
+  ];
+  assert(coveredNumberSet(slip).size === 25, '25');
+  assert(validateBetSlip(slip) === 'MAX_COVERED', 'blocked');
+});
+
+record('24 covered ok, 25 rejected, 0 counts', () => {
+  const twentyFour = [
+    { betType: 'red', amount: 500 },
+    ...[2, 4, 6, 8, 10, 11].map((n) => ({ betType: 'straight', targetNumber: n, amount: 500 })),
+  ];
+  assert(coveredNumberSet(twentyFour).size === 24, '24');
+  assert(validateBetSlip(twentyFour) === null, '24 ok');
+  const twentyFive = [...twentyFour, { betType: 'straight', targetNumber: 13, amount: 500 }];
+  assert(coveredNumberSet(twentyFive).size === 25, '25');
+  assert(validateBetSlip(twentyFive) === 'MAX_COVERED', '25 blocked');
+  const withZero = [
+    { betType: 'dozen_1', amount: 500 },
+    { betType: 'dozen_2', amount: 500 },
+    { betType: 'straight', targetNumber: 0, amount: 500 },
+  ];
+  assert(coveredNumberSet(withZero).has(0), '0 in union');
+  assert(coveredNumberSet(withZero).size === 25, '0 makes 25');
+  assert(validateBetSlip(withZero) === 'MAX_COVERED', '0 counts');
+  assert(ERROR_COPY.MAX_COVERED.includes('numeri coperti'), 'copy');
 });
 
 const failed = results.filter((r) => !r.ok);

@@ -33,6 +33,19 @@ export const BETS = [500, 1000, 2000];
 export const DEFAULT_BET = 500;
 export const CHIP_UNIT = 500;
 export const MAX_TABLE_BETS = 44;
+export const MAX_STRAIGHT_NUMBERS_PER_SPIN = 12;
+export const MAX_DOZENS_PER_SPIN = 2;
+export const MAX_COVERED_NUMBERS_PER_SPIN = 24;
+export const MAX_TOTAL_STAKE_PER_SPIN = 10000;
+
+const DOZEN_TYPES = new Set(['dozen_1', 'dozen_2', 'dozen_3']);
+const COMPLEMENTARY_PAIRS = [
+  ['COMPLEMENTARY_COLOR', ['red', 'black']],
+  ['COMPLEMENTARY_PARITY', ['even', 'odd']],
+  ['COMPLEMENTARY_RANGE', ['low', 'high']],
+  ['COMPLEMENTARY_RANGE', ['1_18', '19_36']],
+  ['COMPLEMENTARY_RANGE', ['low_18', 'high_18']],
+];
 
 /** European single-zero wheel order (clockwise from 0). */
 export const EUROPEAN_WHEEL_ORDER = Object.freeze([
@@ -43,6 +56,20 @@ export const EUROPEAN_WHEEL_ORDER = Object.freeze([
 export const RED_NUMBERS = Object.freeze(new Set([
   1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ]));
+
+export const BLACK_NUMBERS = Object.freeze(new Set([
+  2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35,
+]));
+
+const EVEN_NUMBERS = Object.freeze(new Set([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36]));
+const ODD_NUMBERS = Object.freeze(new Set([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35]));
+const LOW_NUMBERS = Object.freeze(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]));
+const HIGH_NUMBERS = Object.freeze(new Set([19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]));
+const DOZEN_RANGES = Object.freeze({
+  dozen_1: Object.freeze([...Array(12)].map((_, i) => i + 1)),
+  dozen_2: Object.freeze([...Array(12)].map((_, i) => i + 13)),
+  dozen_3: Object.freeze([...Array(12)].map((_, i) => i + 25)),
+});
 
 export const OUTSIDE_BETS = Object.freeze([
   { type: 'red', label: 'ROSSO', className: 'bet-chip bet-chip--red' },
@@ -69,6 +96,13 @@ export const ERROR_COPY = {
   API_ERROR: 'Risposta non valida dal server. Riprova.',
   AUTH_ERROR: 'Apri Roulette direttamente da Telegram per giocare.',
   SELECT_BET: 'Seleziona una puntata sul tavolo',
+  COMPLEMENTARY_COLOR: 'Non puoi coprire contemporaneamente Rosso e Nero.',
+  COMPLEMENTARY_PARITY: 'Non puoi coprire contemporaneamente Pari e Dispari.',
+  COMPLEMENTARY_RANGE: 'Non puoi coprire contemporaneamente 1–18 e 19–36.',
+  MAX_DOZENS: 'Massimo 2 decine per giro.',
+  MAX_STRAIGHT: 'Massimo 12 numeri pieni per giro.',
+  MAX_TOTAL_STAKE: 'Puntata totale massima superata.',
+  MAX_COVERED: 'Troppi numeri coperti nello stesso giro.',
 };
 
 export function pocketColor(number) {
@@ -137,6 +171,49 @@ export function totalBet(bets) {
   return (bets || []).reduce((sum, bet) => sum + Number(bet.amount || 0), 0);
 }
 
+export function numbersCoveredByBet(bet) {
+  const betType = String(bet?.betType || '');
+  if (betType === 'straight') {
+    const n = Number(bet.targetNumber);
+    return Number.isInteger(n) ? [n] : [];
+  }
+  if (betType === 'split' || betType === 'corner') return uniqSorted(bet.numbers);
+  if (betType === 'red') return [...RED_NUMBERS];
+  if (betType === 'black') return [...BLACK_NUMBERS];
+  if (betType === 'even') return [...EVEN_NUMBERS];
+  if (betType === 'odd') return [...ODD_NUMBERS];
+  if (DOZEN_RANGES[betType]) return [...DOZEN_RANGES[betType]];
+  if (betType === 'low' || betType === 'low_18' || betType === '1_18') return [...LOW_NUMBERS];
+  if (betType === 'high' || betType === 'high_18' || betType === '19_36') return [...HIGH_NUMBERS];
+  return [];
+}
+
+export function coveredNumberSet(bets) {
+  const union = new Set();
+  (bets || []).forEach((bet) => {
+    numbersCoveredByBet(bet).forEach((n) => union.add(Number(n)));
+  });
+  return union;
+}
+
+export function validateBetSlip(bets) {
+  const list = bets || [];
+  if (!list.length) return 'INVALID_BET';
+  const types = new Set(list.map((row) => String(row.betType || '')));
+  for (const [code, pair] of COMPLEMENTARY_PAIRS) {
+    if (pair.every((name) => types.has(name))) return code;
+  }
+  const dozenCount = [...types].filter((name) => DOZEN_TYPES.has(name)).length;
+  if (dozenCount > MAX_DOZENS_PER_SPIN) return 'MAX_DOZENS';
+  const straightNumbers = new Set(
+    list.filter((row) => row.betType === 'straight').map((row) => Number(row.targetNumber)),
+  );
+  if (straightNumbers.size > MAX_STRAIGHT_NUMBERS_PER_SPIN) return 'MAX_STRAIGHT';
+  if (totalBet(list) > MAX_TOTAL_STAKE_PER_SPIN) return 'MAX_TOTAL_STAKE';
+  if (coveredNumberSet(list).size > MAX_COVERED_NUMBERS_PER_SPIN) return 'MAX_COVERED';
+  return null;
+}
+
 export function isAllowedChip(amount) {
   return BETS.includes(Number(amount));
 }
@@ -144,7 +221,9 @@ export function isAllowedChip(amount) {
 export function canAddChip(bets, amount, balance) {
   const chip = Number(amount);
   if (!isAllowedChip(chip)) return false;
-  if (Number.isFinite(balance) && totalBet(bets) + chip > balance) return false;
+  const used = totalBet(bets);
+  if (used + chip > MAX_TOTAL_STAKE_PER_SPIN) return false;
+  if (Number.isFinite(balance) && used + chip > balance) return false;
   return true;
 }
 
@@ -193,18 +272,26 @@ export function addChipToBets(bets, { betType, targetNumber, numbers, amount, ba
   if (current.length >= MAX_TABLE_BETS && !current.some((row) => rowKey(row) === key)) {
     return { bets: current, error: 'INVALID_BET' };
   }
-  const existing = current.find((row) => rowKey(row) === key);
+  const next = current.map((row) => ({
+    ...row,
+    numbers: Array.isArray(row.numbers) ? [...row.numbers] : row.numbers,
+  }));
+  const existing = next.find((row) => rowKey(row) === key);
   if (existing) {
     existing.amount = Number(existing.amount) + chip;
-    return { bets: current, error: null };
+  } else {
+    next.push({
+      betType: placed.betType,
+      targetNumber: placed.targetNumber,
+      numbers: placed.numbers,
+      amount: chip,
+    });
   }
-  current.push({
-    betType: placed.betType,
-    targetNumber: placed.targetNumber,
-    numbers: placed.numbers,
-    amount: chip,
-  });
-  return { bets: current, error: null };
+  const slipError = validateBetSlip(next);
+  if (slipError) {
+    return { bets: current, error: slipError };
+  }
+  return { bets: next, error: null };
 }
 
 export function clearBets() {
@@ -340,13 +427,6 @@ export function pushHistory(history, entry, { limit = 10 } = {}) {
   return next.slice(0, limit);
 }
 
-function formatMult(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value);
-  if (Number.isInteger(n)) return String(n);
-  return String(n).replace('.', ',');
-}
-
 /** Breakdown rows from server payload only — no client math. */
 export function buildPayoutRows(payload, formatChips) {
   if (!payload) return [];
@@ -358,46 +438,32 @@ export function buildPayoutRows(payload, formatChips) {
     }
   };
   const rows = [];
-  const total = payload.total_bet ?? payload.bet;
+  const stake = payload.total_stake ?? payload.total_bet ?? payload.bet;
+  if (typeof stake === 'number') {
+    rows.push({ label: 'Puntata totale', value: safeFormat(stake) });
+  }
+
+  const standard = payload.standard_return ?? payload.total_base_return ?? payload.payout_base;
+  if (Number(standard) > 0) {
+    rows.push({ label: 'Vincita Roulette', value: safeFormat(standard) });
+  }
+
+  if (Number(payload.roulette_bonus) > 0) {
+    rows.push({ label: 'BONUS CASINÒ', value: `+${safeFormat(payload.roulette_bonus)}` });
+  }
+
+  if (Number(payload.zero_bonus) > 0) {
+    rows.push({ label: 'ZERO BONUS', value: `+${safeFormat(payload.zero_bonus)}` });
+  }
+
+  const total = payload.final_credit;
   if (typeof total === 'number') {
-    rows.push({ label: 'TOTALE PUNTATO', value: safeFormat(total) });
+    rows.push({
+      label: 'TOTALE',
+      value: payload.won && total > 0 ? `+${safeFormat(total)}` : safeFormat(0),
+      emphasis: true,
+    });
   }
-
-  if (payload.won && typeof payload.final_credit === 'number' && payload.final_credit > 0) {
-    if (typeof payload.payout_base === 'number' || typeof payload.base_credit_total === 'number') {
-      rows.push({
-        label: 'Vincita base',
-        value: safeFormat(payload.base_credit_total ?? payload.payout_base),
-      });
-    }
-
-    if (payload.vip_applied && Number(payload.vip_multiplier) > 1) {
-      const pct = Math.round((Number(payload.vip_multiplier) - 1) * 100);
-      rows.push({
-        label: `VIP +${pct}%`,
-        value: typeof payload.after_vip === 'number' ? safeFormat(payload.after_vip) : '',
-      });
-    }
-
-    if (Number(payload.level_multiplier) > 1) {
-      rows.push({
-        label: `Livello ×${formatMult(payload.level_multiplier)}`,
-        value: typeof payload.after_level === 'number' ? safeFormat(payload.after_level) : '',
-      });
-    }
-
-    if (payload.daily_applied && Number(payload.daily_multiplier) > 1) {
-      rows.push({
-        label: `Bonus giornaliero ×${formatMult(payload.daily_multiplier)}`,
-        value: '',
-      });
-    }
-
-    rows.push({ label: 'VINCITA TOTALE', value: `+${safeFormat(payload.final_credit)}`, emphasis: true });
-    return rows;
-  }
-
-  rows.push({ label: 'VINCITA TOTALE', value: safeFormat(0), emphasis: true });
   return rows;
 }
 
@@ -408,13 +474,22 @@ export function isStraightWinPayload(payload) {
     && payload.bets.some((row) => row?.won && row?.bet_type === 'straight');
 }
 
+export function isZeroBonusPayload(payload) {
+  return Number(payload?.number) === 0 && Number(payload?.zero_bonus) > 0;
+}
+
 export function outcomeHeadline(payload) {
   if (!payload) return '';
+  if (isZeroBonusPayload(payload)) return 'ZERO BONUS';
   if (isStraightWinPayload(payload)) return 'NUMERO PIENO!';
   return payload.won ? 'HAI VINTO' : 'RITENTA';
 }
 
 export function outcomeKicker(payload) {
+  if (isZeroBonusPayload(payload)) {
+    const extra = Number(payload.zero_bonus);
+    return Number.isFinite(extra) ? `+${extra} Chips` : 'ZERO BONUS';
+  }
   if (!isStraightWinPayload(payload)) return '';
   return 'GRANDE VINCITA';
 }
@@ -445,7 +520,15 @@ export const PREVIEW_SCENARIOS = {
     target_number: null,
     won: true,
     payout_base: 1000,
-    after_vip: 1000,
+    standard_return: 1000,
+    base_net_profit: 500,
+    theoretical_bonus: 0,
+    roulette_bonus_cap: 5,
+    roulette_bonus: 0,
+    zero_stake: 0,
+    zero_bonus: 0,
+    total_stake: 500,
+    after_vip: 500,
     after_level: 1000,
     daily_applied: false,
     daily_multiplier: 1,
@@ -474,7 +557,15 @@ export const PREVIEW_SCENARIOS = {
     target_number: null,
     won: true,
     payout_base: 3000,
-    after_vip: 3000,
+    standard_return: 3000,
+    base_net_profit: 2000,
+    theoretical_bonus: 0,
+    roulette_bonus_cap: 10,
+    roulette_bonus: 0,
+    zero_stake: 0,
+    zero_bonus: 0,
+    total_stake: 1000,
+    after_vip: 2000,
     after_level: 3000,
     daily_applied: false,
     daily_multiplier: 1,
@@ -503,7 +594,15 @@ export const PREVIEW_SCENARIOS = {
     target_number: 17,
     won: true,
     payout_base: 18000,
-    after_vip: 18000,
+    standard_return: 18000,
+    base_net_profit: 17500,
+    theoretical_bonus: 0,
+    roulette_bonus_cap: 5,
+    roulette_bonus: 0,
+    zero_stake: 0,
+    zero_bonus: 0,
+    total_stake: 500,
+    after_vip: 17500,
     after_level: 18000,
     daily_applied: false,
     daily_multiplier: 1,
@@ -532,18 +631,26 @@ export const PREVIEW_SCENARIOS = {
     target_number: 17,
     won: true,
     payout_base: 18000,
-    after_vip: 23400,
-    after_level: 35100,
-    daily_applied: true,
-    daily_multiplier: 2,
-    final_credit: 70200,
+    standard_return: 18000,
+    base_net_profit: 17500,
+    theoretical_bonus: 16625,
+    roulette_bonus_cap: 5,
+    roulette_bonus: 5,
+    zero_stake: 0,
+    zero_bonus: 0,
+    total_stake: 500,
+    after_vip: 22750,
+    after_level: 34125,
+    daily_applied: false,
+    daily_multiplier: 1,
+    final_credit: 18005,
     vip_applied: true,
     vip_level: 3,
     vip_multiplier: 1.3,
     level_multiplier: 1.5,
     balance_before: 10000,
-    balance_after: 79700,
-    chips_delta: 69700,
+    balance_after: 27505,
+    chips_delta: 17505,
     history_multiplier: 1.5,
     xp_awarded: 0,
     streak_count: 0,
@@ -619,19 +726,64 @@ export const PREVIEW_SCENARIOS = {
     target_number: null,
     won: true,
     payout_base: 1000,
-    after_vip: 1300,
-    after_level: 1950,
-    daily_applied: true,
-    daily_multiplier: 2,
-    final_credit: 3900,
+    standard_return: 1000,
+    base_net_profit: 500,
+    theoretical_bonus: 475,
+    roulette_bonus_cap: 5,
+    roulette_bonus: 5,
+    zero_stake: 0,
+    zero_bonus: 0,
+    total_stake: 500,
+    after_vip: 650,
+    after_level: 975,
+    daily_applied: false,
+    daily_multiplier: 1,
+    final_credit: 1005,
     vip_applied: true,
     vip_level: 3,
     vip_multiplier: 1.3,
     level_multiplier: 1.5,
     balance_before: 20000,
-    balance_after: 23400,
-    chips_delta: 3400,
+    balance_after: 20505,
+    chips_delta: 505,
     history_multiplier: 1.5,
+    xp_awarded: 0,
+    streak_count: 0,
+    streak_multiplier: 1,
+    second_chance_applied: false,
+    replayed: false,
+  },
+  win_zero: {
+    action_id: 'preview-win-zero',
+    number: 0,
+    color: 'green',
+    parity: null,
+    bet: 500,
+    bet_type: 'straight',
+    target_number: 0,
+    won: true,
+    payout_base: 18000,
+    standard_return: 18000,
+    base_net_profit: 17500,
+    theoretical_bonus: 0,
+    roulette_bonus_cap: 5,
+    roulette_bonus: 0,
+    zero_stake: 500,
+    zero_bonus: 250,
+    total_stake: 500,
+    after_vip: 17500,
+    after_level: 17500,
+    daily_applied: false,
+    daily_multiplier: 1,
+    final_credit: 18250,
+    vip_applied: false,
+    vip_level: 0,
+    vip_multiplier: 1,
+    level_multiplier: 1,
+    balance_before: 10000,
+    balance_after: 27750,
+    chips_delta: 17750,
+    history_multiplier: 1,
     xp_awarded: 0,
     streak_count: 0,
     streak_multiplier: 1,
@@ -699,6 +851,10 @@ PREVIEW_SCENARIOS.win_inside = {
   ],
   won: true,
   payout_base: 31500,
+  standard_return: 31500,
+  roulette_bonus: 0,
+  zero_bonus: 0,
+  total_stake: 2000,
   after_vip: 31500,
   after_level: 31500,
   daily_applied: false,
@@ -738,6 +894,10 @@ PREVIEW_SCENARIOS.win_multi = {
   ],
   won: true,
   payout_base: 21000,
+  standard_return: 21000,
+  roulette_bonus: 0,
+  zero_bonus: 0,
+  total_stake: 2000,
   after_vip: 21000,
   after_level: 21000,
   daily_applied: false,

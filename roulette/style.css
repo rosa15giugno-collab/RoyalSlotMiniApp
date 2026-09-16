@@ -250,8 +250,13 @@ body {
   text-overflow: ellipsis;
 }
 
+#betAmountLabel.selection__value {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
 #betTypeLabel.selection__value {
-  overflow: hidden;
+  overflow: visible;
   text-overflow: clip;
   font-size: 11px;
   letter-spacing: 0.01em;
@@ -1605,6 +1610,15 @@ html.is-chip-dragging .felt {
   line-height: 0.9;
   color: #fff;
   text-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.result-hero__zero {
+  margin: 8px 0 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: var(--gold-bright);
+  text-transform: uppercase;
 }
 
 .result-card {
