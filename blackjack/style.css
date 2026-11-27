@@ -987,3 +987,38 @@ body {
     animation: none !important;
   }
 }
+
+.actions:has(#splitBtn:not([hidden])) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.btn--split {
+  background: #372507;
+  border: 1px solid #d4b06a;
+}
+
+#splitBtn[hidden], #retryBtn[hidden], .split-hands[hidden] {
+  display: none;
+}
+
+.split-hands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  font-size: .75rem;
+}
+
+.split-hands li {
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid rgba(212, 176, 106, .32);
+  border-radius: 6px;
+}
+
+.split-hands li[aria-current="step"] {
+  border-color: #d4b06a;
+}
