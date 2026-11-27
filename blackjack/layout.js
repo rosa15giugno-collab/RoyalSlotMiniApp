@@ -9,6 +9,8 @@ export const ERROR_COPY = {
   ROUND_NOT_FOUND: 'Mano non trovata',
   ROUND_ALREADY_SETTLED: 'Mano già conclusa',
   ROUND_NOT_OWNER: 'Questa mano non è tua',
+  SPLIT_NOT_AVAILABLE: 'La divisione è disponibile solo per la coppia iniziale.',
+  SPLIT_HAND_CHANGED: 'La mano attiva è cambiata. Ho aggiornato il tavolo.',
   INVALID_ACTION: 'Azione non valida',
   ROUND_IN_PROGRESS: 'Hai già una mano in corso',
   NETWORK_ERROR: 'Errore di rete. Riprova.',
