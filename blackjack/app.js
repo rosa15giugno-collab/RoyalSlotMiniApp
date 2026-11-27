@@ -1,4 +1,4 @@
-import { CONFIG } from '../js/config.js';
+import { CONFIG } from '../js/config.js?v=split-1';
 import { TelegramBridge } from '../js/telegram-bridge.js';
 import { formatChips } from '../js/utils.js';
 import {
@@ -20,12 +20,13 @@ import {
   BETS,
   DEFAULT_BET,
   ERROR_COPY,
+  SUIT_SYMBOL,
   buildPayoutRows,
   classifyOutcome,
   outcomeHeadline,
   outcomeSubline,
   streakBadgeText,
-} from './layout.js';
+} from './layout.js?v=split-1';
 import {
   idleRoundFields,
   redactCurrentLog,
@@ -49,7 +50,7 @@ const state = {
   payload: null,
   authenticated: false,
   animating: false,
-  /** @type {{ kind: 'start'|'hit'|'stand', actionId: string, bet?: number, roundId?: string } | null} */
+  /** @type {{ kind: 'start'|'hit'|'stand'|'split', actionId: string, bet?: number, roundId?: string, handIndex?: number } | null} */
   pending: null,
   streak: { streak_count: 0, streak_multiplier: 1 },
   _prevStreak: 0,
@@ -73,6 +74,9 @@ const dom = {
   playActions: document.getElementById('playActions'),
   hitBtn: document.getElementById('hitBtn'),
   standBtn: document.getElementById('standBtn'),
+  splitBtn: document.getElementById('splitBtn'),
+  retryBtn: document.getElementById('retryBtn'),
+  splitHands: document.getElementById('splitHands'),
   errorBox: document.getElementById('errorBox'),
   streakBadge: document.getElementById('streakBadge'),
 };
@@ -111,12 +115,15 @@ function setBusy(isBusy) {
   const playing = state.ui === 'playing' || state.ui === 'action_pending' || state.ui === 'recovering';
   const flags = controlsDisabled({
     authenticated: state.authenticated,
-    busy: isBusy || state.animating,
+    busy: isBusy || state.animating || Boolean(state.pending),
     playing,
   });
   dom.dealBtn.disabled = flags.deal;
   dom.hitBtn.disabled = flags.hit;
   dom.standBtn.disabled = flags.stand;
+  dom.splitBtn.disabled = flags.hit || !state.payload?.can_split || state.balance < state.bet;
+  dom.retryBtn.hidden = !state.pending || isBusy;
+  dom.retryBtn.disabled = !state.authenticated || isBusy;
   dom.betPresets.querySelectorAll('button').forEach((btn) => {
     btn.disabled = flags.bets;
   });
@@ -128,6 +135,25 @@ function paintHandsInstant(payload) {
   // Preserve hole secrecy: render card?.hidden backs only.
   dom.dealerHand.replaceChildren(...dealer.map((card) => createCardElement(card)));
   dom.playerHand.replaceChildren(...player.map((card) => createCardElement(card)));
+  paintSplitHands(payload);
+}
+
+function paintSplitHands(payload) {
+  const hands = payload?.hands || [];
+  dom.splitHands.hidden = hands.length === 0;
+  dom.splitHands.replaceChildren(...hands.map((hand, index) => {
+    const item = document.createElement('li');
+    const active = index === payload.active_hand;
+    const label = document.createElement('strong');
+    label.textContent = `Mano ${index + 1}${active ? ' · in gioco' : ''}`;
+    const detail = document.createElement('span');
+    const cards = hand.cards.map(card => card.rank + (SUIT_SYMBOL[card.suit] || '')).join(' ');
+    const outcome = hand.result ? { a: 'Vinta', b: 'Persa', push: 'Pari' }[hand.result.outcome] : '';
+    detail.textContent = `${cards} · ${hand.score}${outcome ? ' · ' + outcome + ' · ' + formatChips(hand.result.final_credit) + ' fiches restituite' : ''}`;
+    if (active) item.setAttribute('aria-current', 'step');
+    item.append(label, detail);
+    return item;
+  }));
 }
 
 function renderStreak(payload) {
@@ -193,6 +219,13 @@ function renderSoftHint(payload) {
 }
 
 function renderOutcome(payload) {
+  if (payload.hands) {
+    clearOutcomeFx();
+    dom.outcomePanel.hidden = false;
+    dom.outcomeTitle.textContent = 'Due mani concluse';
+    dom.outcomeSub.textContent = `Totale restituito: ${formatChips(payload.final_credit)} fiches`;
+    return;
+  }
   try {
     const kind = classifyOutcome(payload);
     if (!kind) {
@@ -281,7 +314,7 @@ function paintScores(payload) {
 }
 
 function paintChrome() {
-  dom.betValue.textContent = String(state.bet);
+  dom.betValue.textContent = String(state.payload?.total_bet ?? state.bet);
   const rawBalance = balanceLabel(state.balance, state.authenticated);
   if (rawBalance != null) dom.balance.textContent = rawBalance;
   else if (state.balance != null) dom.balance.textContent = formatChips(state.balance);
@@ -302,6 +335,7 @@ function paintChrome() {
   dom.playActions.hidden = !inPlay;
   dom.hitBtn.hidden = !inPlay;
   dom.standBtn.hidden = !inPlay;
+  dom.splitBtn.hidden = !inPlay || !state.payload?.split_eligible;
   setBusy(busy());
 }
 
@@ -350,7 +384,7 @@ async function applyPayload(payload, { mode = 'instant' } = {}) {
 
   const nextBalance = typeof payload.balance_after === 'number' ? payload.balance_after : state.balance;
 
-  if (mode === 'deal' || mode === 'hit' || mode === 'stand') {
+  if (!payload.hands && (mode === 'deal' || mode === 'hit' || mode === 'stand')) {
     state.animating = true;
     paintChrome();
     try {
@@ -517,12 +551,14 @@ function pendingRequestBody(pending) {
   return {
     round_id: pending.roundId || state.roundId,
     action_id: pending.actionId,
+    ...(Number.isInteger(pending.handIndex) ? { hand_index: pending.handIndex } : {}),
   };
 }
 
 function pendingPath(pending) {
   if (pending.kind === 'start') return CONFIG.api.endpoints.blackjackStart;
   if (pending.kind === 'hit') return CONFIG.api.endpoints.blackjackHit;
+  if (pending.kind === 'split') return CONFIG.api.endpoints.blackjackSplit;
   return CONFIG.api.endpoints.blackjackStand;
 }
 
@@ -573,8 +609,8 @@ async function recoverAfterNetwork() {
       paintChrome();
       return false;
     }
-    // No open round: start/stand may have committed — retry same id for replay.
-    if (pending.kind === 'start' || pending.kind === 'stand') {
+    // Any action can settle a round; keep its original id for replay.
+    {
       try {
         const payload = await sendPending(pending);
         clearPending();
@@ -682,13 +718,13 @@ async function play(kind) {
   if (state.pending && state.pending.kind !== kind) return;
   if (!state.roundId && !(state.pending && state.pending.kind === kind)) return;
   clearError();
-  const pending = ensurePending(kind, { roundId: state.roundId });
+  const pending = ensurePending(kind, { roundId: state.roundId, handIndex: state.payload?.active_hand });
   state.ui = 'action_pending';
   paintChrome();
   try {
     const payload = await sendPending(pending);
     clearPending();
-    await applyPayload(payload, { mode: kind === 'hit' ? 'hit' : 'stand' });
+    await applyPayload(payload, { mode: kind === 'split' ? 'instant' : kind });
   } catch (error) {
     if (isRecoverableNetworkError(error)) {
       await recoverAfterNetwork();
@@ -702,6 +738,9 @@ async function play(kind) {
       setError(error.code || 'NETWORK_ERROR');
       paint();
       return;
+    }
+    if (error.code === 'SPLIT_HAND_CHANGED' || error.code === 'SPLIT_NOT_AVAILABLE' || error.code === 'INSUFFICIENT_BALANCE') {
+      await resumeRound();
     }
     state.ui = state.roundId ? 'playing' : 'error';
     setError(error.code || 'NETWORK_ERROR');
@@ -754,6 +793,12 @@ async function init() {
     }
     if (busy()) return;
     void play('hit');
+  });
+  dom.splitBtn.addEventListener('click', () => {
+    if (!dom.splitBtn.disabled && !busy()) void play('split');
+  });
+  dom.retryBtn.addEventListener('click', () => {
+    if (state.authenticated && state.pending && !busy()) void recoverAfterNetwork();
   });
   dom.standBtn.addEventListener('click', () => {
     if (!state.authenticated) {
